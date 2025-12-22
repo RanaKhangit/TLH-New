@@ -1,0 +1,13 @@
+{
+  "doctors": {
+    "0x465c85467daae4b50fb7533b3c5fa4162064da27cf87682801496dfbe27ba538": {
+      "spruceDID": "did:key:z6MkvDummySpruceDidReplaceMe",
+      "saltHex": "e64991f6245a189ae85403d922e4e7ebb9d49f861c8d34e040d3212cb0f1f887"
+    },
+    "0xc8264830268d766260b0a253cc8af997cf97a0284de915d7c4925cb6fb661016": {
+      "spruceDID": "did:key:z6MkvDummySpruceDIDReplaceMe",
+      "saltHex": "f0a138aa0974c9da40be05e2248618f987f5b3a4aa1129d73af71a1f63e8acfd"
+    }
+  },
+  "credentials": {}
+}
