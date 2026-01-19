@@ -1,0 +1,37 @@
+# Environment and secrets
+.env
+config/secrets.toml
+config/api.txt
+
+# Docker volumes (if using bind mounts)
+data/
+logs/
+
+# Node data
+chainlink-data/
+
+# Wallet files
+*.json
+!package.json
+!docker-compose*.json
+
+# Backup files
+*.bak
+*.backup
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Temporary files
+tmp/
+temp/

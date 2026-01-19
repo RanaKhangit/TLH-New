@@ -1,0 +1,25 @@
+# Cron Job Spec
+# This job runs on a schedule and fetches data periodically
+#
+# Use case: Regular price updates, heartbeat checks, scheduled data fetching
+
+type = "cron"
+schemaVersion = 1
+name = "Scheduled ETH Price Check"
+evmChainID = "11155111"  # Sepolia
+
+# Run every 5 minutes
+schedule = "CRON_TZ=UTC */5 * * * *"
+
+observationSource = """
+    // Fetch current ETH price
+    fetch [type="http" method=GET url="https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd"]
+
+    // Parse JSON response
+    parse [type="jsonparse" path="ethereum,usd"]
+
+    // Log the result (for testing - won't write on-chain)
+    log [type="log" message="Current ETH price: $(parse)"]
+
+    fetch -> parse -> log
+"""

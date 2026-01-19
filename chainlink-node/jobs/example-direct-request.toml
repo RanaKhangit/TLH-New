@@ -1,0 +1,34 @@
+# Direct Request Job Spec
+# This job responds to on-chain oracle requests
+#
+# How it works:
+# 1. A smart contract emits an OracleRequest event
+# 2. This job picks up the event and runs the pipeline
+# 3. The result is written back to the requesting contract
+
+type = "directrequest"
+schemaVersion = 1
+name = "ETH-USD Price Feed"
+contractAddress = "0x0000000000000000000000000000000000000000"  # Replace with your Oracle contract
+minContractPaymentLinkJuels = "100000000000000000"  # 0.1 LINK minimum payment
+evmChainID = "11155111"  # Sepolia
+
+observationSource = """
+    // Fetch price from CoinGecko API
+    fetch [type="http" method=GET url="https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd"]
+
+    // Parse the JSON response
+    parse [type="jsonparse" path="ethereum,usd"]
+
+    // Multiply by 10^8 to get 8 decimal places (standard for price feeds)
+    multiply [type="multiply" times="100000000"]
+
+    // Convert to uint256 for on-chain use
+    encode [type="ethabiencode" abi="(uint256 value)" data="{\\"value\\": $(multiply)}"]
+
+    // Submit the result back to the requesting contract
+    submit [type="ethtx" to="0x0000000000000000000000000000000000000000" data="$(encode)"]
+
+    // Define the pipeline flow
+    fetch -> parse -> multiply -> encode -> submit
+"""

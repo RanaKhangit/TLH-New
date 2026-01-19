@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(docker:*)",
+      "Bash(open:*)",
+      "Bash(curl:*)",
+      "Bash(tree:*)",
+      "Bash(chmod:*)",
+      "Bash(/Users/yuba/Pixelette/tlh-poc/deco-scripts/plaid_creds.sh:*)",
+      "Bash(npm install)",
+      "Bash(npm run demo:*)",
+      "Bash(npm run verify:*)",
+      "Bash(cat:*)",
+      "Bash(bash)",
+      "Bash(EOFCURL)",
+      "Bash(npm install:*)"
+    ]
+  }
+}

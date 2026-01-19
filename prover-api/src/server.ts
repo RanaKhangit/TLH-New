@@ -3,11 +3,21 @@ import { z } from "zod"
 import crypto from "node:crypto"
 import fs from "node:fs"
 import path from "node:path"
-import { keccak256, toHex } from "viem"
+import { keccak256, toHex, hexToBytes } from "viem"
+import { secp256k1 } from "@noble/curves/secp256k1"
+import { parse } from "csv-parse/sync"
 
 const PORT = 8787
 const DATA_DIR = path.join(process.cwd(), "data")
 const STORE_PATH = path.join(DATA_DIR, "store.json")
+
+// Path to GMC dummy data CSV
+const GMC_CSV_PATH = path.join(process.cwd(), "..", "dummy-data.csv")
+
+// Path to DECO attestation files (in repo root)
+const REPO_ROOT = path.join(process.cwd(), "..")
+const ATTESTATION_PATH = path.join(REPO_ROOT, "json-encoded-attestation.json")
+const DECODED_DATA_PATH = path.join(REPO_ROOT, "decoded-attested-data.json")
 
 type Store = {
   doctors: Record<
@@ -28,6 +38,22 @@ type Store = {
       expiresAt: string
     }
   >
+}
+
+// DECO attestation types
+interface DecoAttestation {
+  signature_scheme: string
+  attestation_scheme: string
+  data_hex: string
+  signature_hex: string
+  public_key_hex: string
+}
+
+interface DecoAttestedData {
+  success: boolean[]
+  proof_specs: any[]
+  public_outputs: string[]
+  data_retrieval_time: string
 }
 
 function ensureStore(): Store {
@@ -57,6 +83,50 @@ function computeAttestationHashFromBase64(attestationBase64: string): string {
   return keccak256(toHex(bytes))
 }
 
+/**
+ * Verify ECDSA secp256k1 signature using keccak256
+ */
+function verifyDecoSignature(attestation: DecoAttestation): boolean {
+  try {
+    const dataHex = attestation.data_hex.replace("0x", "")
+    const messageHash = keccak256(`0x${dataHex}`)
+
+    const sigHex = attestation.signature_hex.replace("0x", "")
+    const r = BigInt("0x" + sigHex.slice(0, 64))
+    const s = BigInt("0x" + sigHex.slice(64, 128))
+
+    const pubKeyHex = attestation.public_key_hex.replace("0x", "")
+
+    const signature = new secp256k1.Signature(r, s)
+    const msgHashBytes = hexToBytes(messageHash)
+    const pubKeyBytes = hexToBytes(`0x${pubKeyHex}`)
+
+    return secp256k1.verify(signature, msgHashBytes, pubKeyBytes)
+  } catch (error) {
+    console.error("Signature verification error:", error)
+    return false
+  }
+}
+
+/**
+ * Load DECO attestation files from repo root
+ */
+function loadDecoAttestation(): { attestation: DecoAttestation; decodedData: DecoAttestedData } | null {
+  try {
+    if (!fs.existsSync(ATTESTATION_PATH) || !fs.existsSync(DECODED_DATA_PATH)) {
+      return null
+    }
+
+    const attestation = JSON.parse(fs.readFileSync(ATTESTATION_PATH, "utf8")) as DecoAttestation
+    const decodedData = JSON.parse(fs.readFileSync(DECODED_DATA_PATH, "utf8")) as DecoAttestedData
+
+    return { attestation, decodedData }
+  } catch (error) {
+    console.error("Failed to load DECO attestation:", error)
+    return null
+  }
+}
+
 const app = express()
 app.use(express.json({ limit: "10mb" }))
 
@@ -72,14 +142,152 @@ const LinkInquirySchema = z.object({
 
 const IngestSchema = z.object({
   doctorCommitment: z.string().regex(/^0x[0-9a-fA-F]{64}$/),
-  // from DECO "Identity Check" result (stand-in for NHS/GMC)
   valid: z.boolean(),
   checkedAt: z.iso.datetime(),
   expiresAt: z.iso.datetime(),
   attestationBase64: z.string().min(1),
 })
 
-// --- Routes ---
+// --- DECO Verification Endpoints (for Chainlink node) ---
+
+/**
+ * GET /deco/attestation
+ * Returns the raw DECO attestation for the Chainlink node to fetch
+ */
+app.get("/deco/attestation", (_req, res) => {
+  const data = loadDecoAttestation()
+  if (!data) {
+    return res.status(404).json({ error: "No DECO attestation files found" })
+  }
+  return res.json(data.attestation)
+})
+
+/**
+ * GET /deco/verify
+ * Verifies the DECO attestation and returns PASS/FAIL result
+ * This is the main endpoint the Chainlink node will call
+ */
+app.get("/deco/verify", (_req, res) => {
+  console.log("[DECO] Verification request received")
+
+  const data = loadDecoAttestation()
+  if (!data) {
+    console.log("[DECO] No attestation files found")
+    return res.json({
+      result: "FAIL",
+      reason: "No attestation files found",
+      inquiryId: "",
+      timestamp: new Date().toISOString(),
+    })
+  }
+
+  const { attestation, decodedData } = data
+
+  // Step 1: Verify signature
+  const signatureValid = verifyDecoSignature(attestation)
+  console.log(`[DECO] Signature verification: ${signatureValid ? "PASS" : "FAIL"}`)
+
+  if (!signatureValid) {
+    return res.json({
+      result: "FAIL",
+      reason: "Invalid signature",
+      inquiryId: "",
+      timestamp: new Date().toISOString(),
+    })
+  }
+
+  // Step 2: Check all predicates passed
+  const predicatesPassed = decodedData.success.every((s) => s === true)
+  console.log(`[DECO] Predicates check: ${predicatesPassed ? "PASS" : "FAIL"} (${decodedData.success.join(", ")})`)
+
+  if (!predicatesPassed) {
+    return res.json({
+      result: "FAIL",
+      reason: "Predicates failed",
+      inquiryId: "",
+      timestamp: new Date().toISOString(),
+    })
+  }
+
+  // Step 3: Extract inquiry ID from the URL in the attestation
+  // The URL contains $[[your_inquiry_id]] placeholder, but we can get it from public_outputs
+  const verificationType = decodedData.public_outputs[0] || ""
+  const completedAt = decodedData.public_outputs[1] || ""
+
+  // Generate a proof ID from the attestation signature
+  const proofId = attestation.signature_hex.slice(0, 18) // First 8 bytes of signature
+
+  console.log(`[DECO] Verification PASSED - Type: ${verificationType}, Completed: ${completedAt}`)
+
+  return res.json({
+    result: "PASS",
+    reason: "All checks passed",
+    proofId: proofId,
+    verificationType: verificationType,
+    completedAt: completedAt,
+    dataRetrievalTime: decodedData.data_retrieval_time,
+    timestamp: new Date().toISOString(),
+  })
+})
+
+/**
+ * POST /deco/verify
+ * Alternative POST endpoint that accepts attestation in request body
+ * Useful if attestation is passed directly rather than read from file
+ */
+app.post("/deco/verify", (req, res) => {
+  console.log("[DECO] POST Verification request received")
+
+  const { attestation, decodedData } = req.body
+
+  if (!attestation || !decodedData) {
+    return res.json({
+      result: "FAIL",
+      reason: "Missing attestation or decodedData in request body",
+      inquiryId: "",
+      timestamp: new Date().toISOString(),
+    })
+  }
+
+  // Verify signature
+  const signatureValid = verifyDecoSignature(attestation)
+  console.log(`[DECO] Signature verification: ${signatureValid ? "PASS" : "FAIL"}`)
+
+  if (!signatureValid) {
+    return res.json({
+      result: "FAIL",
+      reason: "Invalid signature",
+      inquiryId: "",
+      timestamp: new Date().toISOString(),
+    })
+  }
+
+  // Check predicates
+  const predicatesPassed = decodedData.success.every((s: boolean) => s === true)
+  console.log(`[DECO] Predicates check: ${predicatesPassed ? "PASS" : "FAIL"}`)
+
+  if (!predicatesPassed) {
+    return res.json({
+      result: "FAIL",
+      reason: "Predicates failed",
+      inquiryId: "",
+      timestamp: new Date().toISOString(),
+    })
+  }
+
+  const proofId = attestation.signature_hex.slice(0, 18)
+
+  return res.json({
+    result: "PASS",
+    reason: "All checks passed",
+    proofId: proofId,
+    verificationType: decodedData.public_outputs[0] || "",
+    completedAt: decodedData.public_outputs[1] || "",
+    timestamp: new Date().toISOString(),
+  })
+})
+
+// --- Original Routes ---
 app.post("/doctor/register", (req, res) => {
   const parsed = RegisterDoctorSchema.safeParse(req.body)
   if (!parsed.success) return res.status(400).json(parsed.error.format())
@@ -129,8 +337,6 @@ app.post("/deco/ingest-attestation", (req, res) => {
     return res.status(404).json({ error: "Unknown doctorCommitment. Register doctor first." })
   }
 
-  // MVP: we trust the uploaded DECO output, and just fingerprint it
-  // TODO: actually call DECO sandbox
   const attestationHash = computeAttestationHashFromBase64(attestationBase64)
 
   store.credentials[doctorCommitment] = {
@@ -161,6 +367,163 @@ app.get("/credential/latest/:doctorCommitment", (req, res) => {
 
 app.get("/health", (_req, res) => res.json({ ok: true }))
 
+// --- GMC Registration Lookup ---
+
+interface GMCRecord {
+  "GMC Ref No": string
+  Surname: string
+  "Given Name": string
+  Gender: string
+  Qualification: string
+  "Year Of Qualification": string
+  "Place of Qualification": string
+  "Registration Status": string
+  "Revalidation Status": string
+  "Designated Body": string
+  [key: string]: string
+}
+
+/**
+ * Load and parse the GMC CSV file
+ */
+function loadGMCData(): GMCRecord[] {
+  try {
+    if (!fs.existsSync(GMC_CSV_PATH)) {
+      console.error(`GMC CSV file not found at ${GMC_CSV_PATH}`)
+      return []
+    }
+    const csvContent = fs.readFileSync(GMC_CSV_PATH, "utf8")
+    const records = parse(csvContent, {
+      columns: true,
+      skip_empty_lines: true,
+      trim: true,
+    }) as GMCRecord[]
+    return records
+  } catch (error) {
+    console.error("Failed to load GMC data:", error)
+    return []
+  }
+}
+
+/**
+ * GET /gmc/lookup
+ * Lookup doctor registration status by surname and given name
+ *
+ * Query params:
+ *   - surname: Doctor's surname (required)
+ *   - givenName: Doctor's given name (required)
+ *
+ * This endpoint is designed to be called by the DECO Sandbox
+ */
+app.get("/gmc/lookup", (req, res) => {
+  const surname = req.query.surname as string
+  const givenName = req.query.givenName as string
+
+  console.log(`[GMC] Lookup request - Surname: "${surname}", Given Name: "${givenName}"`)
+
+  if (!surname || !givenName) {
+    return res.status(400).json({
+      error: "Missing required query parameters: surname and givenName",
+    })
+  }
+
+  const records = loadGMCData()
+  if (records.length === 0) {
+    return res.status(500).json({
+      error: "Failed to load GMC data",
+    })
+  }
+
+  // Case-insensitive search
+  const match = records.find(
+    (r) =>
+      r.Surname.toLowerCase() === surname.toLowerCase() &&
+      r["Given Name"].toLowerCase() === givenName.toLowerCase()
+  )
+
+  if (!match) {
+    console.log(`[GMC] No match found for "${surname}, ${givenName}"`)
+    return res.status(404).json({
+      found: false,
+      surname,
+      givenName,
+      message: "Doctor not found in GMC register",
+    })
+  }
+
+  console.log(`[GMC] Found: ${match["Given Name"]} ${match.Surname} - Status: ${match["Registration Status"]}`)
+
+  return res.json({
+    found: true,
+    gmcRefNo: match["GMC Ref No"],
+    surname: match.Surname,
+    givenName: match["Given Name"],
+    registrationStatus: match["Registration Status"],
+    revalidationStatus: match["Revalidation Status"],
+    qualification: match.Qualification,
+    yearOfQualification: match["Year Of Qualification"],
+    placeOfQualification: match["Place of Qualification"],
+    designatedBody: match["Designated Body"],
+  })
+})
+
+/**
+ * POST /gmc/lookup
+ * Alternative POST endpoint for DECO Sandbox (if it prefers POST)
+ */
+app.post("/gmc/lookup", (req, res) => {
+  const { surname, givenName } = req.body
+
+  console.log(`[GMC] POST Lookup request - Surname: "${surname}", Given Name: "${givenName}"`)
+
+  if (!surname || !givenName) {
+    return res.status(400).json({
+      error: "Missing required fields: surname and givenName",
+    })
+  }
+
+  const records = loadGMCData()
+  if (records.length === 0) {
+    return res.status(500).json({
+      error: "Failed to load GMC data",
+    })
+  }
+
+  // Case-insensitive search
+  const match = records.find(
+    (r) =>
+      r.Surname.toLowerCase() === surname.toLowerCase() &&
+      r["Given Name"].toLowerCase() === givenName.toLowerCase()
+  )
+
+  if (!match) {
+    console.log(`[GMC] No match found for "${surname}, ${givenName}"`)
+    return res.status(404).json({
+      found: false,
+      surname,
+      givenName,
+      message: "Doctor not found in GMC register",
+    })
+  }
+
+  console.log(`[GMC] Found: ${match["Given Name"]} ${match.Surname} - Status: ${match["Registration Status"]}`)
+
+  return res.json({
+    found: true,
+    gmcRefNo: match["GMC Ref No"],
+    surname: match.Surname,
+    givenName: match["Given Name"],
+    registrationStatus: match["Registration Status"],
+    revalidationStatus: match["Revalidation Status"],
+    qualification: match.Qualification,
+    yearOfQualification: match["Year Of Qualification"],
+    placeOfQualification: match["Place of Qualification"],
+    designatedBody: match["Designated Body"],
+  })
+})
+
 app.listen(PORT, () => {
   console.log(`prover-api listening on http://127.0.0.1:${PORT}`)
+  console.log(`DECO verification endpoint: http://127.0.0.1:${PORT}/deco/verify`)
+  console.log(`GMC lookup endpoint: http://127.0.0.1:${PORT}/gmc/lookup?surname=X&givenName=Y`)
 })

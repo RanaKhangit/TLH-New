@@ -1,0 +1,53 @@
+services:
+  # PostgreSQL Database for Chainlink Node
+  postgres:
+    image: postgres:15
+    container_name: chainlink-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-mysecretpassword}
+      POSTGRES_DB: ${POSTGRES_DB:-chainlink}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - chainlink-network
+
+  # Chainlink Node
+  chainlink:
+    image: smartcontract/chainlink:2.26.0
+    container_name: chainlink-node
+    platform: linux/amd64
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "6688:6688"  # Web UI
+    volumes:
+      - ./config:/chainlink
+      - chainlink_data:/chainlink-data
+    environment:
+      - CL_DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-mysecretpassword}@postgres:5432/${POSTGRES_DB:-chainlink}?sslmode=disable
+    command: ["node", "-config", "/chainlink/config.toml", "-secrets", "/chainlink/secrets.toml", "start", "-a", "/chainlink/api.txt"]
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - chainlink-network
+
+volumes:
+  postgres_data:
+    driver: local
+  chainlink_data:
+    driver: local
+
+networks:
+  chainlink-network:
+    driver: bridge

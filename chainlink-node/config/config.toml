@@ -1,0 +1,63 @@
+# Chainlink Node Configuration (v2.26.0)
+# Minimal config for local development
+
+[Log]
+Level = 'info'
+
+[WebServer]
+AllowOrigins = '*'
+HTTPPort = 6688
+SecureCookies = false
+
+[WebServer.TLS]
+HTTPSPort = 0
+
+[Feature]
+FeedsManager = true
+LogPoller = true
+
+# =============================================================================
+# EVM Chain Configuration - Sepolia Testnet
+# =============================================================================
+[[EVM]]
+ChainID = '11155111'
+Enabled = true
+AutoCreateKey = true
+FinalityDepth = 50
+FinalityTagEnabled = true
+LinkContractAddress = '0x779877A7B0D9E8603169DdbD7836e478b4624789'
+MinIncomingConfirmations = 3
+MinContractPayment = '0.1 link'
+NonceAutoSync = true
+NoNewHeadsThreshold = '3m'
+
+[EVM.Transactions]
+ForwardersEnabled = false
+
+[EVM.BalanceMonitor]
+Enabled = true
+
+[EVM.GasEstimator]
+Mode = 'BlockHistory'
+PriceDefault = '20 gwei'
+PriceMin = '1 gwei'
+LimitDefault = 500000
+EIP1559DynamicFees = true
+FeeCapDefault = '100 gwei'
+TipCapDefault = '1 wei'
+TipCapMin = '1 wei'
+
+[EVM.HeadTracker]
+HistoryDepth = 100
+
+[EVM.NodePool]
+PollFailureThreshold = 5
+PollInterval = '10s'
+SelectionMode = 'HighestHead'
+SyncThreshold = 5
+
+# RPC Node Configuration
+[[EVM.Nodes]]
+Name = 'Sepolia-Primary'
+WSURL = 'wss://sepolia.ethereum.validationcloud.io/v1/lll0Mm6Ti3NvCS1etac3ZwBpdVutGaNLyYjjjQn-YHg'
+HTTPURL = 'https://sepolia.ethereum.validationcloud.io/v1/lll0Mm6Ti3NvCS1etac3ZwBpdVutGaNLyYjjjQn-YHg'

@@ -1,0 +1,237 @@
+{
+
+  
+    "success"
+    :
+     
+    [
+    
+        
+    true
+    ,
+    
+        
+    true
+    
+      
+    ]
+    ,
+    
+      
+    "proof_specs"
+    :
+     
+    [
+    
+        
+    {
+    
+          
+    "tls_version"
+    :
+     
+    "v1.3"
+    ,
+    
+          
+    "client"
+    :
+     
+    {
+    
+            
+    "method"
+    :
+     
+    "verify-request"
+    ,
+    
+            
+    "request_spec"
+    :
+     
+    {
+    
+              
+    "method"
+    :
+     
+    "GET"
+    ,
+    
+              
+    "url"
+    :
+     
+    "https://2b9954b2dc74.ngrok-free.app/gmc/lookup?givenName=$[[givenName]]&surname=$[[surname]]"
+    ,
+    
+              
+    "pad_secrets_to_digits"
+    :
+     
+    {
+    
+                
+    "default_chars"
+    :
+     
+    300
+    ,
+    
+                
+    "default_digits"
+    :
+     
+    64
+    
+              
+    }
+    
+            
+    }
+    ,
+    
+            
+    "json_proof_spec"
+    :
+     
+    {
+    }
+    
+          
+    }
+    ,
+    
+          
+    "server"
+    :
+     
+    {
+    
+            
+    "method"
+    :
+     
+    "verify-json-response"
+    ,
+    
+            
+    "request_spec"
+    :
+     
+    {
+    }
+    ,
+    
+            
+    "json_proof_spec"
+    :
+     
+    {
+    
+              
+    "pad_secrets_to_digits"
+    :
+     
+    {
+    
+                
+    "default_chars"
+    :
+     
+    300
+    ,
+    
+                
+    "default_digits"
+    :
+     
+    64
+    
+              
+    }
+    ,
+    
+              
+    "predicates"
+    :
+     
+    [
+    
+                
+    {
+    
+                  
+    "op"
+    :
+     
+    "equal"
+    ,
+    
+                  
+    "queries_for_scalars"
+    :
+     
+    [
+    
+                    
+    "body.registrationStatus"
+    
+                  
+    ]
+    ,
+    
+                  
+    "public_operands"
+    :
+     
+    [
+    
+                    
+    "Registered with Licence"
+    
+                  
+    ]
+    
+                
+    }
+    
+              
+    ]
+    
+            
+    }
+    
+          
+    }
+    
+        
+    }
+    
+      
+    ]
+    ,
+    
+      
+    "public_outputs"
+    :
+     
+    [
+    ]
+    ,
+    
+      
+    "prover_chosen_attested_data"
+    :
+     
+    ""
+    ,
+    
+      
+    "data_retrieval_time"
+    :
+     
+    "2026-01-19T14:43:48Z"
+    
+    }

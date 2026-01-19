@@ -1,0 +1,22 @@
+# Webhook Job Spec
+# This job exposes an HTTP endpoint that can be triggered externally
+#
+# Use case: External systems can trigger oracle jobs via HTTP
+
+type = "webhook"
+schemaVersion = 1
+name = "External Data Request"
+externalJobID = "0eec7e1d-d0d2-476c-a1a8-72dfb6633f46"  # Unique UUID for this job
+
+observationSource = """
+    // Fetch data from provided URL (passed as input)
+    fetch [type="http" method=GET url="$(jobSpec.url)"]
+
+    // Parse the response based on provided JSON path
+    parse [type="jsonparse" path="$(jobSpec.path)"]
+
+    // Return the result
+    encode [type="ethabiencode" abi="(bytes32 requestId, uint256 value)" data="{\\"requestId\\": $(jobSpec.requestId), \\"value\\": $(parse)}"]
+
+    fetch -> parse -> encode
+"""

@@ -7,7 +7,19 @@
     "0xc8264830268d766260b0a253cc8af997cf97a0284de915d7c4925cb6fb661016": {
       "spruceDID": "did:key:z6MkvDummySpruceDIDReplaceMe",
       "saltHex": "f0a138aa0974c9da40be05e2248618f987f5b3a4aa1129d73af71a1f63e8acfd"
+    },
+    "0xb1ede9729daf4db3112a2f2a9ea3b501a0349cfca76ad68518e6d64d0a246548": {
+      "spruceDID": "did:demo:inq_JzQB3w3TmJbBDogDntVSNG2bic4j",
+      "saltHex": "984c585fbbc2f47d8a6637a376b20d1886fed7dd34eeee03279e43b0c588129c"
     }
   },
-  "credentials": {}
+  "credentials": {
+    "0xb1ede9729daf4db3112a2f2a9ea3b501a0349cfca76ad68518e6d64d0a246548": {
+      "doctorCommitment": "0xb1ede9729daf4db3112a2f2a9ea3b501a0349cfca76ad68518e6d64d0a246548",
+      "valid": true,
+      "attestationHash": "0x975122498f563ef96b95508910460241fee2cb7ca85d4816ef483701da34a693",
+      "checkedAt": "2026-01-12T13:36:14.061Z",
+      "expiresAt": "2027-01-12T13:36:14.061Z"
+    }
+  }
 }

@@ -1,0 +1,12 @@
+type = "webhook"
+schemaVersion = 1
+name = "deco-verification"
+externalJobID = "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+
+observationSource = """
+    fetch_and_verify [type="bridge" name="deco-adapter" requestData="{\\"id\\": \\"deco-verify\\", \\"data\\": {}}"]
+
+    parse_result [type="jsonparse" path="data,txHash" data="$(fetch_and_verify)"]
+
+    fetch_and_verify -> parse_result
+"""

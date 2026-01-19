@@ -1,0 +1,4 @@
+targets:
+  staging:
+    name: deco-verification-workflow-staging
+    config_path: config.staging.json

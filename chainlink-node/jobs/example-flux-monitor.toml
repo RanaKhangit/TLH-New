@@ -1,0 +1,36 @@
+# Flux Monitor Job Spec
+# This job monitors a price feed and submits updates when deviation threshold is met
+#
+# Use case: Decentralized price feeds (like Chainlink Price Feeds)
+
+type = "fluxmonitor"
+schemaVersion = 1
+name = "ETH-USD Flux Monitor"
+evmChainID = "11155111"  # Sepolia
+
+# Contract addresses (replace with actual deployed contracts)
+contractAddress = "0x0000000000000000000000000000000000000000"  # FluxAggregator contract
+
+# Timing configuration
+idleTimerPeriod = "1m"      # Max time between submissions
+idleTimerDisabled = false
+pollTimerPeriod = "30s"     # How often to check for price changes
+pollTimerDisabled = false
+
+# Deviation thresholds
+threshold = 0.5             # Submit if price changes by 0.5%
+absoluteThreshold = 0.01    # Or if absolute change exceeds this
+
+# Payment
+minPayment = "100000000000000000"  # 0.1 LINK
+
+observationSource = """
+    // Fetch from multiple sources for reliability
+    coingecko [type="http" method=GET url="https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd"]
+    coingecko_parse [type="jsonparse" path="ethereum,usd"]
+
+    // Multiply to get 8 decimals
+    multiply [type="multiply" times="100000000"]
+
+    coingecko -> coingecko_parse -> multiply
+"""

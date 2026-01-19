@@ -12,6 +12,8 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
+    "@noble/curves": "^1.4.0",
+    "csv-parse": "^6.1.0",
     "express": "^5.2.1",
     "viem": "^2.43.3",
     "zod": "^4.2.1"
