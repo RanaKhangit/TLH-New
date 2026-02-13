@@ -34,7 +34,10 @@ const __dirname = path.dirname(__filename)
 dotenv.config({ path: path.join(__dirname, '../../cre-workflow/tls-cre-poc/.env') })
 
 const CRE_ETH_PRIVATE_KEY = process.env.CRE_ETH_PRIVATE_KEY
-const SEPOLIA_RPC_URL = process.env.SEPOLIA_RPC_URL?.replace(/"/g, '') || 'https://sepolia.ethereum.validationcloud.io/v1/lll0Mm6Ti3NvCS1etac3ZwBpdVutGaNLyYjjjQn-YHg'
+const SEPOLIA_RPC_URL = process.env.SEPOLIA_RPC_URL?.replace(/"/g, '')
+if (!SEPOLIA_RPC_URL) {
+  throw new Error('SEPOLIA_RPC_URL environment variable is required')
+}
 
 // Paths to the DECO attestation files
 const ATTESTATION_PATH = path.join(__dirname, '../../json-encoded-attestation.json')
