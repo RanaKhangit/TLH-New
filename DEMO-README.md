@@ -184,9 +184,7 @@ You should see: `DECO External Adapter running on http://localhost:8788`
 #### Step 5: Configure the Chainlink Node
 
 1. Open http://localhost:6688 in your browser
-2. Login with:
-   - Email: `admin@pixelette.local`
-   - Password: `PixeletteChainlink2024!`
+2. Login with the email and password you configured in `chainlink-node/.env` (`CHAINLINK_API_EMAIL` / `CHAINLINK_API_PASSWORD`).
 
 3. **Add the Bridge:**
    - Go to **Bridges** → **New Bridge**
@@ -385,7 +383,7 @@ cp ../cre-workflow/tls-cre-poc/.env .env
 Or create manually with:
 ```
 CRE_ETH_PRIVATE_KEY=your_private_key_here
-SEPOLIA_RPC_URL=https://sepolia.ethereum.validationcloud.io/v1/lll0Mm6Ti3NvCS1etac3ZwBpdVutGaNLyYjjjQn-YHg
+SEPOLIA_RPC_URL=https://sepolia.ethereum.validationcloud.io/v1/YOUR_KEY_HERE
 ```
 
 ##### Step 3: Run the verification script
@@ -550,4 +548,4 @@ curl http://localhost:8787/health
 
 ### Transaction fails
 - Check wallet has Sepolia ETH
-- Verify RPC URL is working: `curl -X POST https://sepolia.ethereum.validationcloud.io/v1/lll0Mm6Ti3NvCS1etac3ZwBpdVutGaNLyYjjjQn-YHg -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}'`
+- Verify RPC URL is working: `curl -X POST $SEPOLIA_RPC_URL -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}'`
