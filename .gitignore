@@ -16,3 +16,7 @@ api.txt
 # OS files
 .DS_Store
 Thumbs.db
+
+# Foundry
+contracts/out/
+contracts/cache/
