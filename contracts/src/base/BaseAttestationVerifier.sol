@@ -16,6 +16,9 @@ abstract contract BaseAttestationVerifier is Initializable, AccessControlUpgrade
     bytes32 public constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
     bytes32 public constant SIGNER_ADMIN_ROLE = keccak256("SIGNER_ADMIN_ROLE");
 
+    /// @dev Domain tag included in signature digest per ADR-002 §A.
+    string internal constant DOMAIN = "TLH_ATTESTATION_V1";
+
     // -------------------------
     // Custom errors
     // -------------------------
@@ -23,6 +26,8 @@ abstract contract BaseAttestationVerifier is Initializable, AccessControlUpgrade
     error UnauthorizedSigner(address recovered);
     error DuplicateAttestation(bytes32 attestationId);
     error EmptyPredicateData();
+    error ResultMismatch();
+    error ExpiredAttestation(uint256 expiresAt, uint256 nowTs);
 
     // -------------------------
     // Events (success-path only)
@@ -51,6 +56,7 @@ abstract contract BaseAttestationVerifier is Initializable, AccessControlUpgrade
     // -------------------------
     // Init
     // -------------------------
+    /// @param admin Address granted DEFAULT_ADMIN_ROLE, ADMIN_ROLE, and SIGNER_ADMIN_ROLE.
     function __BaseAttestationVerifier_init(address admin) internal onlyInitializing {
         __AccessControl_init();
         _grantRole(DEFAULT_ADMIN_ROLE, admin);
@@ -61,11 +67,15 @@ abstract contract BaseAttestationVerifier is Initializable, AccessControlUpgrade
     // -------------------------
     // Signer management
     // -------------------------
+    /// @notice Whitelist a signer address for attestation verification.
+    /// @param signer Address to add to the signer whitelist.
     function addSigner(address signer) external onlyRole(SIGNER_ADMIN_ROLE) {
         signerWhitelist[signer] = true;
         emit SignerAdded(signer);
     }
 
+    /// @notice Remove a signer address from the whitelist.
+    /// @param signer Address to remove from the signer whitelist.
     function removeSigner(address signer) external onlyRole(SIGNER_ADMIN_ROLE) {
         signerWhitelist[signer] = false;
         emit SignerRemoved(signer);
@@ -74,6 +84,12 @@ abstract contract BaseAttestationVerifier is Initializable, AccessControlUpgrade
     // -------------------------
     // Core verify + store
     // -------------------------
+    /// @dev Verify signature, enforce replay/result/expiry rules, then store attestation.
+    /// @param attestationId Unique attestation identifier (must not have been used before).
+    /// @param subjectDID DID of the attestation subject.
+    /// @param predicateData ABI-encoded predicate payload; first byte is result flag.
+    /// @param signature ECDSA signature over the chain-bound digest.
+    /// @return result Decoded boolean result from predicateData[0].
     function _verifyAndStore(
         bytes32 attestationId,
         bytes32 subjectDID,
@@ -86,9 +102,20 @@ abstract contract BaseAttestationVerifier is Initializable, AccessControlUpgrade
         // Convention: predicateData[0] is 0x00/0x01 representing result.
         result = predicateData[0] == bytes1(0x01);
 
-        // Signed message: keccak256(abi.encodePacked(attestationId, subjectDID, keccak256(predicateData)))
-        bytes32 digest =
-            keccak256(abi.encodePacked(attestationId, subjectDID, keccak256(predicateData))).toEthSignedMessageHash();
+        // ADR-002 §C: decode ABI-encoded payload after the result byte.
+        (, bool abiResult,, uint256 expiresAt,,,) =
+            abi.decode(predicateData[1:], (bytes32, bool, uint256, uint256, bytes32, bytes32, bytes));
+        if (result != abiResult) revert ResultMismatch();
+        if (result && expiresAt != 0 && block.timestamp > expiresAt) {
+            revert ExpiredAttestation(expiresAt, block.timestamp);
+        }
+
+        // Chain-bound digest per ADR-002 §D: domain + chainid + contract address + payload.
+        bytes32 digest = keccak256(
+                abi.encodePacked(
+                    DOMAIN, block.chainid, address(this), attestationId, subjectDID, keccak256(predicateData)
+                )
+            ).toEthSignedMessageHash();
 
         address recovered = ECDSA.recover(digest, signature);
         if (recovered == address(0)) revert InvalidSignature();
