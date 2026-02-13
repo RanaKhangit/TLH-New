@@ -41,15 +41,17 @@ contract BaseAttestationVerifierTest is Test {
         h.addSigner(signer);
     }
 
-    /// @dev F-02: sign with chain-bound digest (block.chainid + address(this))
+    /// @dev F-02: sign with domain + chain-bound digest
     function _sign(bytes32 attestationId, bytes32 subjectDID, bytes memory predicateData)
         internal
         view
         returns (bytes memory)
     {
         bytes32 digest = keccak256(
-            abi.encodePacked(block.chainid, address(h), attestationId, subjectDID, keccak256(predicateData))
-        ).toEthSignedMessageHash();
+                abi.encodePacked(
+                    "TLH_ATTESTATION_V1", block.chainid, address(h), attestationId, subjectDID, keccak256(predicateData)
+                )
+            ).toEthSignedMessageHash();
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(signerSk, digest);
         return abi.encodePacked(r, s, v);
     }
@@ -113,9 +115,10 @@ contract BaseAttestationVerifierTest is Test {
         bytes32 did = keccak256("did");
         bytes memory predicate = hex"01bb";
 
-        // F-02: chain-bound digest
-        bytes32 digest =
-            keccak256(abi.encodePacked(block.chainid, address(h), attId, did, keccak256(predicate))).toEthSignedMessageHash();
+        // F-02: domain + chain-bound digest
+        bytes32 digest = keccak256(
+                abi.encodePacked("TLH_ATTESTATION_V1", block.chainid, address(h), attId, did, keccak256(predicate))
+            ).toEthSignedMessageHash();
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(badSk, digest);
         bytes memory sig = abi.encodePacked(r, s, v);
 
@@ -130,8 +133,7 @@ contract BaseAttestationVerifierTest is Test {
         bytes memory predicate = hex"01abcdef";
 
         // Sign with OLD format (no chainid, no address)
-        bytes32 oldDigest =
-            keccak256(abi.encodePacked(attId, did, keccak256(predicate))).toEthSignedMessageHash();
+        bytes32 oldDigest = keccak256(abi.encodePacked(attId, did, keccak256(predicate))).toEthSignedMessageHash();
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(signerSk, oldDigest);
         bytes memory sig = abi.encodePacked(r, s, v);
 

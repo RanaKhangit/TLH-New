@@ -17,6 +17,7 @@ abstract contract BaseAttestationVerifier is Initializable, AccessControlUpgrade
 
     bytes32 public constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
     bytes32 public constant SIGNER_ADMIN_ROLE = keccak256("SIGNER_ADMIN_ROLE");
+    string internal constant DOMAIN = "TLH_ATTESTATION_V1";
 
     // -------------------------
     // Custom errors
@@ -88,9 +89,11 @@ abstract contract BaseAttestationVerifier is Initializable, AccessControlUpgrade
         // Convention: predicateData[0] is 0x00/0x01 representing result.
         result = predicateData[0] == bytes1(0x01);
 
-        // F-02: Chain-bound digest includes block.chainid and contract address to prevent cross-chain replay
+        // F-02: Chain-bound digest includes domain, block.chainid and contract address to prevent cross-chain replay
         bytes32 digest = keccak256(
-                abi.encodePacked(block.chainid, address(this), attestationId, subjectDID, keccak256(predicateData))
+                abi.encodePacked(
+                    DOMAIN, block.chainid, address(this), attestationId, subjectDID, keccak256(predicateData)
+                )
             ).toEthSignedMessageHash();
 
         address recovered = ECDSA.recover(digest, signature);

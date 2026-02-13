@@ -80,7 +80,7 @@ All verifier contracts MUST validate signatures using ECDSA recovery against a s
 
 Signature payload MUST be:
 
-`messageHash = keccak256(abi.encodePacked(block.chainid, address(this), attestationId, subjectDID, keccak256(predicateData)))`
+`messageHash = keccak256(abi.encodePacked("TLH_ATTESTATION_V1", block.chainid, address(this), attestationId, subjectDID, keccak256(predicateData)))`
 
 Then apply EIP-191 prefixing:
 
@@ -88,7 +88,7 @@ Then apply EIP-191 prefixing:
 
 Recover signer from `signature` over `ethSignedMessageHash`.
 
-> **Note:** The signed payload binds `block.chainid` and `address(this)` to prevent cross-chain and cross-contract replay, and `subjectDID` to prevent cross-subject replay. `keccak256(predicateData)` covers the full blob including the leading result byte.
+> **Note:** The `"TLH_ATTESTATION_V1"` domain prefix reduces collision risk with other protocols. `block.chainid` and `address(this)` prevent cross-chain and cross-contract replay. `subjectDID` prevents cross-subject replay. `keccak256(predicateData)` covers the full blob including the leading result byte.
 
 ### E) Replay Protection
 Verifiers MUST enforce one-time use of each `attestationId`:
