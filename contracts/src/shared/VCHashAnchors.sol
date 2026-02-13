@@ -10,6 +10,11 @@ import {AccessControlUpgradeable} from "@openzeppelin/contracts-upgradeable/acce
 /// @dev Hash-only storage; no underlying data. Success-path events only; invalid operations revert with custom errors.
 ///      UUPS upgradeable; upgrade auth controlled via UPGRADER_ROLE.
 contract VCHashAnchors is Initializable, UUPSUpgradeable, AccessControlUpgradeable {
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
+    }
+
     bytes32 public constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
     bytes32 public constant UPGRADER_ROLE = keccak256("UPGRADER_ROLE");
     bytes32 public constant ANCHOR_WRITER_ROLE = keccak256("ANCHOR_WRITER_ROLE");
@@ -17,6 +22,7 @@ contract VCHashAnchors is Initializable, UUPSUpgradeable, AccessControlUpgradeab
     error UnauthorizedAnchorWriter(address caller);
     error AnchorNotFound(bytes32 subjectDID, bytes32 vcType);
     error AnchorAlreadyRevoked(bytes32 subjectDID, bytes32 vcType);
+    error AnchorIsRevoked(bytes32 subjectDID, bytes32 vcType);
 
     event HashAnchored(bytes32 indexed subjectDID, bytes32 indexed vcType, bytes32 contentHash, uint256 timestamp);
     event AnchorRevoked(bytes32 indexed subjectDID, bytes32 indexed vcType, uint256 timestamp);
@@ -49,9 +55,12 @@ contract VCHashAnchors is Initializable, UUPSUpgradeable, AccessControlUpgradeab
         if (!hasRole(ANCHOR_WRITER_ROLE, msg.sender)) revert UnauthorizedAnchorWriter(msg.sender);
 
         AnchorRecord storage rec = anchors[subjectDID][vcType];
+
+        // F-14: Durable revocation — once revoked, anchorHash must not silently un-revoke
+        if (rec.revoked) revert AnchorIsRevoked(subjectDID, vcType);
+
         rec.contentHash = contentHash;
         rec.anchoredAt = block.timestamp;
-        rec.revoked = false;
 
         anchorHistory[subjectDID][vcType].push(contentHash);
 

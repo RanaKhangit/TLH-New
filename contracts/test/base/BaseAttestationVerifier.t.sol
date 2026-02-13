@@ -22,6 +22,7 @@ contract BaseVerifierHarness is BaseAttestationVerifier {
 
 contract BaseAttestationVerifierTest is Test {
     using MessageHashUtils for bytes32;
+
     BaseVerifierHarness h;
 
     uint256 signerSk;
@@ -40,12 +41,15 @@ contract BaseAttestationVerifierTest is Test {
         h.addSigner(signer);
     }
 
+    /// @dev F-02: sign with chain-bound digest (block.chainid + address(this))
     function _sign(bytes32 attestationId, bytes32 subjectDID, bytes memory predicateData)
         internal
+        view
         returns (bytes memory)
     {
-        bytes32 digest = keccak256(abi.encodePacked(attestationId, subjectDID, keccak256(predicateData)))
-            .toEthSignedMessageHash();
+        bytes32 digest = keccak256(
+            abi.encodePacked(block.chainid, address(h), attestationId, subjectDID, keccak256(predicateData))
+        ).toEthSignedMessageHash();
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(signerSk, digest);
         return abi.encodePacked(r, s, v);
     }
@@ -109,11 +113,30 @@ contract BaseAttestationVerifierTest is Test {
         bytes32 did = keccak256("did");
         bytes memory predicate = hex"01bb";
 
-        bytes32 digest = keccak256(abi.encodePacked(attId, did, keccak256(predicate))).toEthSignedMessageHash();
+        // F-02: chain-bound digest
+        bytes32 digest =
+            keccak256(abi.encodePacked(block.chainid, address(h), attId, did, keccak256(predicate))).toEthSignedMessageHash();
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(badSk, digest);
         bytes memory sig = abi.encodePacked(r, s, v);
 
         vm.expectRevert(abi.encodeWithSelector(BaseAttestationVerifier.UnauthorizedSigner.selector, badSigner));
+        h.submit(attId, did, predicate, sig);
+    }
+
+    /// @dev F-02: Old-format signature (without chainid/address) must fail
+    function testOldFormatSignatureReverts() public {
+        bytes32 attId = keccak256("att-old-format");
+        bytes32 did = keccak256("did");
+        bytes memory predicate = hex"01abcdef";
+
+        // Sign with OLD format (no chainid, no address)
+        bytes32 oldDigest =
+            keccak256(abi.encodePacked(attId, did, keccak256(predicate))).toEthSignedMessageHash();
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(signerSk, oldDigest);
+        bytes memory sig = abi.encodePacked(r, s, v);
+
+        // Should revert because recovered address won't match whitelisted signer
+        vm.expectRevert();
         h.submit(attId, did, predicate, sig);
     }
 }
