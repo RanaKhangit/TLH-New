@@ -1,10 +1,14 @@
 #!/bin/bash
 
+# Chainlink Node credentials — set these env vars before running
+: "${CHAINLINK_EMAIL:?ERROR: CHAINLINK_EMAIL is not set}"
+: "${CHAINLINK_PASSWORD:?ERROR: CHAINLINK_PASSWORD is not set}"
+
 # Login to get session cookie
 echo "Logging in to Chainlink node..."
 curl -s -X POST http://localhost:6688/sessions \
   -H "Content-Type: application/json" \
-  -d '{"email":"admin@pixelette.local","password":"PixeletteChainlink2024!"}' \
+  -d "{\"email\":\"${CHAINLINK_EMAIL}\",\"password\":\"${CHAINLINK_PASSWORD}\"}" \
   -c /tmp/chainlink-cookies.txt > /dev/null
 
 # Trigger the webhook job

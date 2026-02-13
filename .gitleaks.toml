@@ -1,0 +1,24 @@
+# Gitleaks configuration for TLH repository
+# https://github.com/gitleaks/gitleaks
+
+title = "TLH Secret Scan"
+
+[allowlist]
+  description = "Allow .example files and placeholder patterns"
+  paths = [
+    '''\.env\.example$''',
+    '''secrets\.toml\.example$''',
+    '''evidence/''',
+  ]
+  regexTarget = "match"
+  regexes = [
+    '''YOUR_KEY_HERE''',
+    '''YOUR_POSTGRES_PASSWORD''',
+    '''YOUR_KEYSTORE_PASSWORD''',
+    '''YOUR_PASSWORD_MIN_16_CHARS''',
+    '''YOUR_EMAIL''',
+    '''YOUR_CHAINLINK_API''',
+    '''REPLACE_WITH_''',
+    '''your_private_key_here''',
+    '''DummySpruce''',
+  ]

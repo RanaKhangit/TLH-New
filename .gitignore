@@ -1,1 +1,18 @@
 node_modules
+
+# Environment files (secrets)
+.env
+.env.*
+!.env.example
+
+# Key material
+*.key
+*.pem
+
+# Chainlink Node secrets (already in chainlink-node/.gitignore but belt-and-suspenders)
+secrets.toml
+api.txt
+
+# OS files
+.DS_Store
+Thumbs.db
