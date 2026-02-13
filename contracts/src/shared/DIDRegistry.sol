@@ -7,8 +7,12 @@ import {AccessControlUpgradeable} from "@openzeppelin/contracts-upgradeable/acce
 
 /// @title DIDRegistry
 /// @notice Shared Anchor Chain DID Registry for clinician subjects.
-/// @dev UUPS upgradeable. No constructors. Success-path events only; failure paths revert with custom errors.
+/// @dev UUPS upgradeable. Success-path events only; failure paths revert with custom errors.
 contract DIDRegistry is Initializable, UUPSUpgradeable, AccessControlUpgradeable {
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
+    }
     /// @notice Role allowed to register new DIDs.
     bytes32 public constant REGISTRAR_ROLE = keccak256("REGISTRAR_ROLE");
     /// @notice Role allowed to authorize upgrades (must be a multisig in production).
@@ -25,9 +29,13 @@ contract DIDRegistry is Initializable, UUPSUpgradeable, AccessControlUpgradeable
     /// @dev did => record
     mapping(bytes32 => DIDRecord) private _records;
 
+    /// @notice Timestamp of the last state-mutating operation on any DID.
+    uint256 public lastUpdatedAt;
+
     // -------------------------
     // Custom errors
     // -------------------------
+    error InvalidAdmin();
     error DIDAlreadyRegistered(bytes32 did);
     error DIDNotFound(bytes32 did);
     error NotDIDController(bytes32 did, address caller);
@@ -40,9 +48,17 @@ contract DIDRegistry is Initializable, UUPSUpgradeable, AccessControlUpgradeable
     event DIDDeactivated(bytes32 indexed did, uint256 timestamp);
     event DIDControllerUpdated(bytes32 indexed did, address indexed oldController, address indexed newController);
 
+    /// @notice Unified mutation event for off-chain indexing.
+    /// @param did DID identifier.
+    /// @param action 1 = REGISTER, 2 = DEACTIVATE, 3 = UPDATE_CONTROLLER.
+    /// @param actor Address that triggered the mutation.
+    /// @param timestamp Block timestamp of the mutation.
+    event DIDRegistryUpdated(bytes32 indexed did, uint8 indexed action, address indexed actor, uint256 timestamp);
+
     /// @notice Initializes the registry.
     /// @param admin Address granted DEFAULT_ADMIN_ROLE, REGISTRAR_ROLE, and UPGRADER_ROLE.
     function initialize(address admin) external initializer {
+        if (admin == address(0)) revert InvalidAdmin();
         __AccessControl_init();
 
         _grantRole(DEFAULT_ADMIN_ROLE, admin);
@@ -62,8 +78,10 @@ contract DIDRegistry is Initializable, UUPSUpgradeable, AccessControlUpgradeable
         r.active = true;
         r.registeredAt = block.timestamp;
         r.updatedAt = block.timestamp;
+        lastUpdatedAt = block.timestamp;
 
         emit DIDRegistered(did, controller, block.timestamp);
+        emit DIDRegistryUpdated(did, 1, msg.sender, block.timestamp);
     }
 
     /// @notice Resolve a DID.
@@ -94,8 +112,10 @@ contract DIDRegistry is Initializable, UUPSUpgradeable, AccessControlUpgradeable
 
         r.active = false;
         r.updatedAt = block.timestamp;
+        lastUpdatedAt = block.timestamp;
 
         emit DIDDeactivated(did, block.timestamp);
+        emit DIDRegistryUpdated(did, 2, msg.sender, block.timestamp);
     }
 
     /// @notice Update the controller for an existing DID.
@@ -110,12 +130,14 @@ contract DIDRegistry is Initializable, UUPSUpgradeable, AccessControlUpgradeable
         address old = r.controller;
         r.controller = newController;
         r.updatedAt = block.timestamp;
+        lastUpdatedAt = block.timestamp;
 
         emit DIDControllerUpdated(did, old, newController);
+        emit DIDRegistryUpdated(did, 3, msg.sender, block.timestamp);
     }
 
     /// @dev UUPS upgrade authorization.
     function _authorizeUpgrade(address) internal override onlyRole(UPGRADER_ROLE) {}
 
-    uint256[50] private __gap;
+    uint256[49] private __gap;
 }
