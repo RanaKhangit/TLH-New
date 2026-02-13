@@ -54,13 +54,18 @@ Notes:
 - Only `dataHash` is stored to preserve privacy and reduce gas.
 
 ### C) Predicate Data Encoding (Off-chain to On-chain)
-`predicateData` MUST be ABI-encoded bytes with the following canonical layout:
+`predicateData` is a `bytes` blob with a **leading result byte** followed by an ABI-encoded payload:
 
-`predicateData = abi.encode(predicateType, result, checkedAt, expiresAt, vcType, contentHash, extra)`
+```
+predicateData[0]   = 0x01 (true) | 0x00 (false)   — result flag consumed by BaseAttestationVerifier
+predicateData[1:]  = abi.encode(predicateType, result, checkedAt, expiresAt, vcType, contentHash, extra)
+```
+
+The base verifier reads `predicateData[0]` to determine the boolean `result`. Chain-specific hooks decode `predicateData[1:]` to extract fields.
 
 Where:
 - `predicateType` (bytes32)
-- `result` (bool)
+- `result` (bool) — mirrors predicateData[0] for ABI-decode convenience
 - `checkedAt` (uint256)
 - `expiresAt` (uint256)
 - `vcType` (bytes32): credential type identifier (e.g., `keccak256("GMC_LICENSE")`)
@@ -75,13 +80,15 @@ All verifier contracts MUST validate signatures using ECDSA recovery against a s
 
 Signature payload MUST be:
 
-`messageHash = keccak256(abi.encodePacked(attestationId, dataHash))`
+`messageHash = keccak256(abi.encodePacked(block.chainid, address(this), attestationId, subjectDID, keccak256(predicateData)))`
 
 Then apply EIP-191 prefixing:
 
-`ethSignedMessageHash = ECDSA.toEthSignedMessageHash(messageHash)`
+`ethSignedMessageHash = MessageHashUtils.toEthSignedMessageHash(messageHash)`
 
 Recover signer from `signature` over `ethSignedMessageHash`.
+
+> **Note:** The signed payload binds `block.chainid` and `address(this)` to prevent cross-chain and cross-contract replay, and `subjectDID` to prevent cross-subject replay. `keccak256(predicateData)` covers the full blob including the leading result byte.
 
 ### E) Replay Protection
 Verifiers MUST enforce one-time use of each `attestationId`:

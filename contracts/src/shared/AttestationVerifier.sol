@@ -7,13 +7,20 @@ import {BaseAttestationVerifier} from "../base/BaseAttestationVerifier.sol";
 import {IAttestationVerifier} from "../interfaces/IAttestationVerifier.sol";
 import {IDIDRegistry} from "../interfaces/IDIDRegistry.sol";
 import {IVCHashAnchors} from "../interfaces/IVCHashAnchors.sol";
+import {DIDRegistry} from "./DIDRegistry.sol";
 
 /// @title AttestationVerifier (Shared Anchor)
 /// @notice Verifies DON/relayer attestations and triggers Shared Anchor writes:
 ///         - register/confirm DID in DIDRegistry
 ///         - anchor VC content hash in VCHashAnchors
 /// @dev UUPS upgradeable. Failure paths revert with custom errors (no rejection events).
+///      Side-effects (DID registration, hash anchoring) only occur for positive attestations (result == true).
 contract AttestationVerifier is BaseAttestationVerifier, UUPSUpgradeable, IAttestationVerifier {
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
+    }
+
     bytes32 public constant UPGRADER_ROLE = keccak256("UPGRADER_ROLE");
 
     // External dependencies configured via initializer (no hardcoded addresses)
@@ -27,6 +34,12 @@ contract AttestationVerifier is BaseAttestationVerifier, UUPSUpgradeable, IAttes
     event VCHashAnchoredViaAttestation(
         bytes32 indexed subjectDID, bytes32 indexed vcType, bytes32 contentHash, bytes32 indexed attestationId
     );
+
+    // -------------------------
+    // Custom errors (P1 F-07, F-08)
+    // -------------------------
+    error ResultMismatch();
+    error CredentialExpiredOnSubmission(uint256 expiresAt);
 
     /// @notice Initialize the verifier (proxy).
     /// @param admin Admin address for roles.
@@ -68,28 +81,41 @@ contract AttestationVerifier is BaseAttestationVerifier, UUPSUpgradeable, IAttes
 
     /// @dev Hook: after successful verification, trigger Shared Anchor side-effects.
     ///      Decodes vcType and contentHash from predicateData per ADR-002 layout.
+    ///      F-01: Only triggers side-effects when result == true.
+    ///      F-07: Validates that byte-level result matches ABI-encoded result.
+    ///      F-08: Validates credential is not expired at submission time.
     function _onAttestationVerified(
         bytes32 attestationId,
         bytes32 subjectDID,
         bytes calldata predicateData,
-        bool /*result*/
-    )
-        internal
-        override
-    {
-        // Decode vcType and contentHash from predicateData (ADR-002 canonical layout):
-        // predicateData = abi.encode(predicateType, result, checkedAt, expiresAt, vcType, contentHash, extra)
-        // Positions: skip first byte (result flag used by base), then ABI-decode from offset 1
-        // However, base contract uses predicateData[0] as result byte, and the rest is ABI-encoded.
-        // For simplicity and forward-compat, we decode starting from byte 1:
-        (,,,, bytes32 vcType, bytes32 contentHash,) =
+        bool result
+    ) internal override {
+        // Decode predicateData (ADR-002 canonical layout):
+        // predicateData = [0] result byte | [1:] abi.encode(predicateType, result, checkedAt, expiresAt, vcType, contentHash, extra)
+        (, bool abiResult,, uint256 expiresAt, bytes32 vcType, bytes32 contentHash,) =
             abi.decode(predicateData[1:], (bytes32, bool, uint256, uint256, bytes32, bytes32, bytes));
 
-        // 1) Register DID if not already known (best-effort; ignore revert if already registered)
+        // F-07: Enforce consistency between byte-level result and ABI-encoded result
+        if (result != abiResult) revert ResultMismatch();
+
+        // F-01: Negative attestations must NOT trigger credential-confirming side-effects
+        if (!result) return;
+
+        // F-08: Enforce expiry — credential must not already be expired at submission time
+        if (expiresAt != 0 && expiresAt <= block.timestamp) revert CredentialExpiredOnSubmission(expiresAt);
+
+        // 1) Register DID if not already known
+        // F-03: Only swallow DIDAlreadyRegistered; propagate unexpected errors
         try didRegistry.registerDID(subjectDID, address(this)) {
             emit DIDRegisteredViaAttestation(subjectDID, attestationId);
-        } catch {
-            // DID already registered — proceed
+        } catch (bytes memory reason) {
+            bytes4 selector = bytes4(reason);
+            if (selector != DIDRegistry.DIDAlreadyRegistered.selector) {
+                /// @solidity memory-safe-assembly
+                assembly {
+                    revert(add(reason, 0x20), mload(reason))
+                }
+            }
         }
 
         // 2) Anchor VC content hash

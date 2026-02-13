@@ -10,6 +10,8 @@ import {MessageHashUtils} from "@openzeppelin/contracts/utils/cryptography/Messa
 /// @notice Shared signature verification + replay protection used by both verifiers.
 /// @dev UUPS is implemented in child contracts; this base provides shared storage and logic.
 ///      Success-path events only; all invalid submissions revert with custom errors.
+///      Abstract — not directly deployable. Concrete children MUST include:
+///      `constructor() { _disableInitializers(); }`
 abstract contract BaseAttestationVerifier is Initializable, AccessControlUpgradeable {
     using MessageHashUtils for bytes32;
 
@@ -86,9 +88,10 @@ abstract contract BaseAttestationVerifier is Initializable, AccessControlUpgrade
         // Convention: predicateData[0] is 0x00/0x01 representing result.
         result = predicateData[0] == bytes1(0x01);
 
-        // Signed message: keccak256(abi.encodePacked(attestationId, subjectDID, keccak256(predicateData)))
-        bytes32 digest =
-            keccak256(abi.encodePacked(attestationId, subjectDID, keccak256(predicateData))).toEthSignedMessageHash();
+        // F-02: Chain-bound digest includes block.chainid and contract address to prevent cross-chain replay
+        bytes32 digest = keccak256(
+                abi.encodePacked(block.chainid, address(this), attestationId, subjectDID, keccak256(predicateData))
+            ).toEthSignedMessageHash();
 
         address recovered = ECDSA.recover(digest, signature);
         if (recovered == address(0)) revert InvalidSignature();

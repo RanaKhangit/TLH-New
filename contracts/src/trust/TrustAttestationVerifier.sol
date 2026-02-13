@@ -11,6 +11,11 @@ import {ICredentialRegistry} from "../interfaces/ICredentialRegistry.sol";
 /// @notice Verifies attestations on the trust chain and writes/updates CredentialRegistry on success.
 /// @dev UUPS upgradeable. Failure paths revert with custom errors (no rejection events).
 contract TrustAttestationVerifier is BaseAttestationVerifier, UUPSUpgradeable, IAttestationVerifier {
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
+    }
+
     bytes32 public constant UPGRADER_ROLE = keccak256("UPGRADER_ROLE");
 
     ICredentialRegistry public credentialRegistry;
