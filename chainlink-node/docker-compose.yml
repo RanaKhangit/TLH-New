@@ -6,7 +6,7 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-mysecretpassword}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
       POSTGRES_DB: ${POSTGRES_DB:-chainlink}
     volumes:
       - postgres_data:/var/lib/postgresql/data
@@ -35,7 +35,7 @@ services:
       - ./config:/chainlink
       - chainlink_data:/chainlink-data
     environment:
-      - CL_DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-mysecretpassword}@postgres:5432/${POSTGRES_DB:-chainlink}?sslmode=disable
+      - CL_DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:-chainlink}?sslmode=disable
     command: ["node", "-config", "/chainlink/config.toml", "-secrets", "/chainlink/secrets.toml", "start", "-a", "/chainlink/api.txt"]
     extra_hosts:
       - "host.docker.internal:host-gateway"
