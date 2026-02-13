@@ -99,20 +99,20 @@ Open `chainlink-node/.env` and set these values:
 
 ```env
 POSTGRES_USER=postgres
-POSTGRES_PASSWORD=mysecretpassword
+POSTGRES_PASSWORD=<YOUR_SECURE_PASSWORD>
 POSTGRES_DB=chainlink
 
-CHAINLINK_API_EMAIL=admin@pixelette.local
-CHAINLINK_API_PASSWORD=PixeletteChainlink2024!
+CHAINLINK_API_EMAIL=<YOUR_EMAIL>
+CHAINLINK_API_PASSWORD=<YOUR_PASSWORD_MIN_16_CHARS>
 
-KEYSTORE_PASSWORD=KeystorePass123456
+KEYSTORE_PASSWORD=<YOUR_KEYSTORE_PASSWORD>
 ```
 
-> **Important:** The `CHAINLINK_API_EMAIL` and `CHAINLINK_API_PASSWORD` values above match what `trigger-job.sh` expects. If you change them, update that script too.
+> **Important:** The `CHAINLINK_API_EMAIL` and `CHAINLINK_API_PASSWORD` are also used by `trigger-job.sh` (via env vars `CHAINLINK_EMAIL` / `CHAINLINK_PASSWORD`). Keep them consistent.
 >
 > **Important:** `CHAINLINK_API_PASSWORD` must be at least 16 characters.
 >
-> You do NOT need to set `ALCHEMY_API_KEY` or `INFURA_PROJECT_ID`. The RPC URL is already hardcoded in `config/config.toml` pointing to a ValidationCloud endpoint.
+> You also need to set `SEPOLIA_WS_URL` and `SEPOLIA_HTTP_URL` for the Chainlink Node RPC connection (see `config/config.toml`).
 
 ### B2. Chainlink Node `secrets.toml`
 
@@ -125,10 +125,10 @@ Open `chainlink-node/config/secrets.toml` and fill in the password you chose abo
 
 ```toml
 [Database]
-URL = 'postgresql://postgres:mysecretpassword@postgres:5432/chainlink?sslmode=disable'
+URL = 'postgresql://postgres:<YOUR_POSTGRES_PASSWORD>@postgres:5432/chainlink?sslmode=disable'
 
 [Password]
-Keystore = 'KeystorePass123456'
+Keystore = '<YOUR_KEYSTORE_PASSWORD>'
 ```
 
 > The `YOUR_POSTGRES_PASSWORD` in the URL must match `POSTGRES_PASSWORD` from your `.env` file exactly.
@@ -138,8 +138,8 @@ Keystore = 'KeystorePass123456'
 Create the file `chainlink-node/config/api.txt` with exactly two lines — the email on line 1, the password on line 2:
 
 ```
-admin@pixelette.local
-PixeletteChainlink2024!
+<YOUR_CHAINLINK_API_EMAIL>
+<YOUR_CHAINLINK_API_PASSWORD>
 ```
 
 > These must match the `CHAINLINK_API_EMAIL` and `CHAINLINK_API_PASSWORD` from your `.env`.
@@ -157,7 +157,7 @@ Open `chainlink-node/external-adapter/.env` and set your private key:
 EA_PORT=8788
 PROVER_API_URL=http://localhost:8787
 PRIVATE_KEY=0xYOUR_PRIVATE_KEY_HERE
-SEPOLIA_RPC_URL=https://sepolia.ethereum.validationcloud.io/v1/lll0Mm6Ti3NvCS1etac3ZwBpdVutGaNLyYjjjQn-YHg
+SEPOLIA_RPC_URL=https://sepolia.ethereum.validationcloud.io/v1/YOUR_KEY_HERE
 ```
 
 > **Critical:** `PRIVATE_KEY` is the only value you must change. It must be a hex-encoded Ethereum private key with a `0x` prefix, and the corresponding wallet must have Sepolia ETH for gas. The adapter will refuse to start without it.
@@ -258,9 +258,7 @@ Now that all three services are running, you need to tell the Chainlink Node how
 ### D1. Log In
 
 1. Open http://localhost:6688 in your browser
-2. Log in with:
-   - **Email:** `admin@pixelette.local`
-   - **Password:** `PixeletteChainlink2024!`
+2. Log in with the email and password you set in `chainlink-node/.env` (`CHAINLINK_API_EMAIL` / `CHAINLINK_API_PASSWORD`).
 
 ### D2. Create the Bridge
 
@@ -451,7 +449,7 @@ The bridge URL must be `http://host.docker.internal:8788`, **not** `http://local
 - Make sure your wallet has Sepolia ETH
 - Verify the RPC is reachable:
 ```bash
-curl -X POST https://sepolia.ethereum.validationcloud.io/v1/lll0Mm6Ti3NvCS1etac3ZwBpdVutGaNLyYjjjQn-YHg \
+curl -X POST $SEPOLIA_RPC_URL \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}'
 ```
