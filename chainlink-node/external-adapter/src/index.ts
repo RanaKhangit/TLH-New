@@ -19,7 +19,12 @@ dotenv.config()
 const PORT = process.env.EA_PORT || 8788
 const PROVER_API_URL = process.env.PROVER_API_URL || "http://localhost:8787"
 const PRIVATE_KEY = process.env.PRIVATE_KEY as `0x${string}`
-const SEPOLIA_RPC = process.env.SEPOLIA_RPC_URL || "https://sepolia.ethereum.validationcloud.io/v1/lll0Mm6Ti3NvCS1etac3ZwBpdVutGaNLyYjjjQn-YHg"
+const SEPOLIA_RPC = process.env.SEPOLIA_RPC_URL
+
+if (!SEPOLIA_RPC) {
+  console.error("ERROR: SEPOLIA_RPC_URL environment variable is required")
+  process.exit(1)
+}
 
 if (!PRIVATE_KEY) {
   console.error("ERROR: PRIVATE_KEY environment variable is required")

@@ -28,7 +28,10 @@ dotenv.config({ path: path.join(__dirname, '../../cre-workflow/tls-cre-poc/.env'
 const PERSONA_INQUIRY_ID = process.env.PERSONA_INQUIRY_ID?.replace(/"/g, '')
 const PERSONA_TOKEN = process.env.PERSONA_TOKEN?.replace(/"/g, '')
 const CRE_ETH_PRIVATE_KEY = process.env.CRE_ETH_PRIVATE_KEY
-const SEPOLIA_RPC_URL = process.env.SEPOLIA_RPC_URL?.replace(/"/g, '') || 'https://sepolia.ethereum.validationcloud.io/v1/lll0Mm6Ti3NvCS1etac3ZwBpdVutGaNLyYjjjQn-YHg'
+const SEPOLIA_RPC_URL = process.env.SEPOLIA_RPC_URL?.replace(/"/g, '')
+if (!SEPOLIA_RPC_URL) {
+  throw new Error('SEPOLIA_RPC_URL environment variable is required')
+}
 const PROVER_API_URL = process.env.PROVER_API_URL || 'http://127.0.0.1:8787'
 
 interface PersonaVerification {

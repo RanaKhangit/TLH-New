@@ -57,7 +57,8 @@ SelectionMode = 'HighestHead'
 SyncThreshold = 5
 
 # RPC Node Configuration
+# Set these URLs in chainlink-node/.env — do NOT commit real API keys
 [[EVM.Nodes]]
 Name = 'Sepolia-Primary'
-WSURL = 'wss://sepolia.ethereum.validationcloud.io/v1/lll0Mm6Ti3NvCS1etac3ZwBpdVutGaNLyYjjjQn-YHg'
-HTTPURL = 'https://sepolia.ethereum.validationcloud.io/v1/lll0Mm6Ti3NvCS1etac3ZwBpdVutGaNLyYjjjQn-YHg'
+WSURL = 'REPLACE_WITH_SEPOLIA_WS_URL'
+HTTPURL = 'REPLACE_WITH_SEPOLIA_HTTP_URL'
