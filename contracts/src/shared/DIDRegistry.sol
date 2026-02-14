@@ -7,7 +7,7 @@ import {AccessControlUpgradeable} from "@openzeppelin/contracts-upgradeable/acce
 
 /// @title DIDRegistry
 /// @notice Shared Anchor Chain DID Registry for clinician subjects.
-/// @dev UUPS upgradeable. No constructors. Success-path events only; failure paths revert with custom errors.
+/// @dev UUPS upgradeable. Success-path events only; failure paths revert with custom errors.
 contract DIDRegistry is Initializable, UUPSUpgradeable, AccessControlUpgradeable {
     /// @notice Role allowed to register new DIDs.
     bytes32 public constant REGISTRAR_ROLE = keccak256("REGISTRAR_ROLE");
@@ -39,6 +39,11 @@ contract DIDRegistry is Initializable, UUPSUpgradeable, AccessControlUpgradeable
     event DIDRegistered(bytes32 indexed did, address indexed controller, uint256 timestamp);
     event DIDDeactivated(bytes32 indexed did, uint256 timestamp);
     event DIDControllerUpdated(bytes32 indexed did, address indexed oldController, address indexed newController);
+
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
+    }
 
     /// @notice Initializes the registry.
     /// @param admin Address granted DEFAULT_ADMIN_ROLE, REGISTRAR_ROLE, and UPGRADER_ROLE.
