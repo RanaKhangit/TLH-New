@@ -46,7 +46,7 @@ Invalid operations revert with custom errors; no failure/rejection events are em
 
 | Event | Parameters | Emitted when |
 |-------|-----------|-------------|
-| `CredentialWrittenViaAttestation` | `subjectDID` (indexed), `predicateType` (indexed), `attestationId` (indexed) | Credential written to registry after attestation verification |
+| `CredentialWrittenViaAttestation` | `subjectDID` (indexed), `predicateType` (indexed), `attestationId` (indexed) | Credential written to registry after **positive** attestation (result == true only; negative attestations are stored but do not write to registry) |
 
 ### CredentialRegistry
 
