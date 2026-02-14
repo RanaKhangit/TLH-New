@@ -4,6 +4,9 @@ pragma solidity ^0.8.20;
 /// @title IDIDRegistry
 /// @notice Minimal interface for DID Registry used by verifiers.
 interface IDIDRegistry {
+    /// @notice Thrown when attempting to register a DID that already exists.
+    error DIDAlreadyRegistered(bytes32 did);
+
     /// @notice Register a new DID with an associated controller.
     /// @param did Unique DID identifier (bytes32).
     /// @param controller Address that controls the DID.

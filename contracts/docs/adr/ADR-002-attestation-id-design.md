@@ -54,15 +54,18 @@ Notes:
 - Only `dataHash` is stored to preserve privacy and reduce gas.
 
 ### C) Predicate Data Encoding (Off-chain to On-chain)
-`predicateData` MUST be ABI-encoded bytes with the following canonical layout:
+`predicateData` is a packed bytes value with a **1-byte result flag prefix** followed by ABI-encoded payload:
 
-`predicateData = abi.encode(predicateType, result, checkedAt, expiresAt, vcType, contentHash, extra)`
+```
+predicateData = abi.encodePacked(resultByte, abi.encode(predicateType, result, checkedAt, expiresAt, vcType, contentHash, extra))
+```
 
 Where:
+- `resultByte` (bytes1): `0x01` for positive (true), `0x00` for negative (false) — MUST match the ABI-encoded `result` field; the verifier enforces this via `ResultMismatch` error
 - `predicateType` (bytes32)
-- `result` (bool)
+- `result` (bool): must agree with `resultByte`
 - `checkedAt` (uint256)
-- `expiresAt` (uint256)
+- `expiresAt` (uint256): UNIX timestamp when this predicate expires (0 if non-expiring); verifier enforces `ExpiredAttestation` if `expiresAt != 0 && block.timestamp > expiresAt` on positive attestations
 - `vcType` (bytes32): credential type identifier (e.g., `keccak256("GMC_LICENSE")`)
 - `contentHash` (bytes32): privacy-preserving VC content hash (or proof reference hash)
 - `extra` (bytes): optional extension field (empty in M1 unless explicitly required)
@@ -73,9 +76,18 @@ All verifier contracts MUST validate signatures using ECDSA recovery against a s
 - Use OpenZeppelin `ECDSA` helpers (or equivalent) to recover `recoveredSigner`
 - Require `signers[recoveredSigner] == true` else revert
 
-Signature payload MUST be:
+Signature payload MUST be a **chain-bound, domain-tagged digest** to prevent cross-chain and cross-contract replay:
 
-`messageHash = keccak256(abi.encodePacked(attestationId, dataHash))`
+```
+messageHash = keccak256(abi.encodePacked(
+    "TLH_ATTESTATION_V1",   // domain tag (string constant)
+    block.chainid,            // uint256 — binds to specific chain
+    address(this),            // address — binds to specific verifier contract
+    attestationId,            // bytes32
+    subjectDID,               // bytes32
+    keccak256(predicateData)  // bytes32 — hash of full predicateData
+))
+```
 
 Then apply EIP-191 prefixing:
 

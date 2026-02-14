@@ -20,7 +20,12 @@ All TLH contracts requiring upgradeability MUST use **OpenZeppelin UUPSUpgradeab
 
 Each upgradeable contract MUST:
 - Use `UUPSUpgradeable` and `AccessControlUpgradeable`
-- Use initializer functions only (no constructors)
+- Use initializer functions for proxy state setup (not constructor initialization)
+- Include a constructor with `_disableInitializers()` on every concrete (non-abstract) implementation to prevent direct initialization of the implementation contract:
+  ```solidity
+  /// @custom:oz-upgrades-unsafe-allow constructor
+  constructor() { _disableInitializers(); }
+  ```
 - Implement `_authorizeUpgrade(address newImplementation)` restricted to `onlyRole(UPGRADER_ROLE)`
 - Include a storage gap pattern: `uint256[50] private __gap;` (or consistent equivalent) in every upgradeable base and implementation contract
 - Avoid storage layout breaks (append-only changes; no re-ordering/removal)
