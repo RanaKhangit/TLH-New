@@ -1,0 +1,145 @@
+{
+  "storage": [
+    {
+      "astId": 8648,
+      "contract": "src/trust/TrustAttestationVerifier.sol:TrustAttestationVerifier",
+      "label": "signerWhitelist",
+      "offset": 0,
+      "slot": "0",
+      "type": "t_mapping(t_address,t_bool)"
+    },
+    {
+      "astId": 8652,
+      "contract": "src/trust/TrustAttestationVerifier.sol:TrustAttestationVerifier",
+      "label": "attestationUsed",
+      "offset": 0,
+      "slot": "1",
+      "type": "t_mapping(t_bytes32,t_bool)"
+    },
+    {
+      "astId": 8666,
+      "contract": "src/trust/TrustAttestationVerifier.sol:TrustAttestationVerifier",
+      "label": "attestations",
+      "offset": 0,
+      "slot": "2",
+      "type": "t_mapping(t_bytes32,t_struct(Attestation)8661_storage)"
+    },
+    {
+      "astId": 8926,
+      "contract": "src/trust/TrustAttestationVerifier.sol:TrustAttestationVerifier",
+      "label": "__gap",
+      "offset": 0,
+      "slot": "3",
+      "type": "t_array(t_uint256)50_storage"
+    },
+    {
+      "astId": 9002,
+      "contract": "src/trust/TrustAttestationVerifier.sol:TrustAttestationVerifier",
+      "label": "credentialRegistry",
+      "offset": 0,
+      "slot": "53",
+      "type": "t_contract(ICredentialRegistry)8977"
+    },
+    {
+      "astId": 9209,
+      "contract": "src/trust/TrustAttestationVerifier.sol:TrustAttestationVerifier",
+      "label": "__gap",
+      "offset": 0,
+      "slot": "54",
+      "type": "t_array(t_uint256)50_storage"
+    }
+  ],
+  "types": {
+    "t_address": {
+      "encoding": "inplace",
+      "label": "address",
+      "numberOfBytes": "20"
+    },
+    "t_array(t_uint256)50_storage": {
+      "encoding": "inplace",
+      "label": "uint256[50]",
+      "numberOfBytes": "1600",
+      "base": "t_uint256"
+    },
+    "t_bool": {
+      "encoding": "inplace",
+      "label": "bool",
+      "numberOfBytes": "1"
+    },
+    "t_bytes32": {
+      "encoding": "inplace",
+      "label": "bytes32",
+      "numberOfBytes": "32"
+    },
+    "t_contract(ICredentialRegistry)8977": {
+      "encoding": "inplace",
+      "label": "contract ICredentialRegistry",
+      "numberOfBytes": "20"
+    },
+    "t_mapping(t_address,t_bool)": {
+      "encoding": "mapping",
+      "key": "t_address",
+      "label": "mapping(address => bool)",
+      "numberOfBytes": "32",
+      "value": "t_bool"
+    },
+    "t_mapping(t_bytes32,t_bool)": {
+      "encoding": "mapping",
+      "key": "t_bytes32",
+      "label": "mapping(bytes32 => bool)",
+      "numberOfBytes": "32",
+      "value": "t_bool"
+    },
+    "t_mapping(t_bytes32,t_struct(Attestation)8661_storage)": {
+      "encoding": "mapping",
+      "key": "t_bytes32",
+      "label": "mapping(bytes32 => struct BaseAttestationVerifier.Attestation)",
+      "numberOfBytes": "32",
+      "value": "t_struct(Attestation)8661_storage"
+    },
+    "t_struct(Attestation)8661_storage": {
+      "encoding": "inplace",
+      "label": "struct BaseAttestationVerifier.Attestation",
+      "numberOfBytes": "128",
+      "members": [
+        {
+          "astId": 8654,
+          "contract": "src/trust/TrustAttestationVerifier.sol:TrustAttestationVerifier",
+          "label": "subjectDID",
+          "offset": 0,
+          "slot": "0",
+          "type": "t_bytes32"
+        },
+        {
+          "astId": 8656,
+          "contract": "src/trust/TrustAttestationVerifier.sol:TrustAttestationVerifier",
+          "label": "predicateHash",
+          "offset": 0,
+          "slot": "1",
+          "type": "t_bytes32"
+        },
+        {
+          "astId": 8658,
+          "contract": "src/trust/TrustAttestationVerifier.sol:TrustAttestationVerifier",
+          "label": "result",
+          "offset": 0,
+          "slot": "2",
+          "type": "t_bool"
+        },
+        {
+          "astId": 8660,
+          "contract": "src/trust/TrustAttestationVerifier.sol:TrustAttestationVerifier",
+          "label": "timestamp",
+          "offset": 0,
+          "slot": "3",
+          "type": "t_uint256"
+        }
+      ]
+    },
+    "t_uint256": {
+      "encoding": "inplace",
+      "label": "uint256",
+      "numberOfBytes": "32"
+    }
+  }
+}
