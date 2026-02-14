@@ -1,0 +1,15 @@
+Compiling 44 files with Solc 0.8.24
+Solc 0.8.24 finished in 2.43s
+Compiler run successful with warnings:
+Warning (2018): Function state mutability can be restricted to view
+  --> test/base/BaseAttestationVerifier.t.sol:56:5:
+   |
+56 |     function _sign(bytes32 attestationId, bytes32 subjectDID, bytes memory predicateData)
+   |     ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2018): Function state mutability can be restricted to view
+  --> test/trust/TrustAttestationVerifier.t.sol:60:5:
+   |
+60 |     function _sign(bytes32 attestationId, bytes32 subjectDID, bytes memory predicateData)
+   |     ^ (Relevant source part starts here and spans across multiple lines).
+
