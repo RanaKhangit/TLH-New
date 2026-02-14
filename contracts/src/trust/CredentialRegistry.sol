@@ -46,6 +46,13 @@ contract CredentialRegistry is Initializable, AccessControlUpgradeable, UUPSUpgr
 
     event CredentialRevoked(bytes32 indexed subjectDID, bytes32 indexed predicateType, uint256 timestamp);
 
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
+    }
+
+    /// @notice Initialize the registry (proxy).
+    /// @param admin Address granted DEFAULT_ADMIN_ROLE, ADMIN_ROLE, and UPGRADER_ROLE.
     function initialize(address admin) external initializer {
         __AccessControl_init();
 
@@ -54,7 +61,14 @@ contract CredentialRegistry is Initializable, AccessControlUpgradeable, UUPSUpgr
         _grantRole(UPGRADER_ROLE, admin);
     }
 
-    /// @notice Write or update a credential (verifier only).
+    /// @notice Write or update a credential record for a subject.
+    /// @dev Status is set to Active at write-time (expiry is evaluated at read-time via _withLiveStatus).
+    ///      If the credential was previously Revoked, the revocation is preserved.
+    /// @param subjectDID DID of the credential subject.
+    /// @param predicateType Predicate type identifier (e.g., keccak256("GMC_REGISTERED")).
+    /// @param valid Whether the credential is currently valid.
+    /// @param expiresAt UNIX timestamp when the credential expires (0 = non-expiring).
+    /// @param attestationId Attestation ID that sourced this credential write.
     function writeCredential(
         bytes32 subjectDID,
         bytes32 predicateType,
@@ -73,7 +87,7 @@ contract CredentialRegistry is Initializable, AccessControlUpgradeable, UUPSUpgr
         c.attestationId = attestationId;
 
         if (c.status != CredentialStatus.Revoked) {
-            c.status = _computeStatus(valid, expiresAt);
+            c.status = CredentialStatus.Active;
         }
 
         if (!_predicateTypeSeen[subjectDID][predicateType]) {
@@ -84,12 +98,20 @@ contract CredentialRegistry is Initializable, AccessControlUpgradeable, UUPSUpgr
         emit CredentialWritten(subjectDID, predicateType, valid, attestationId, block.timestamp);
     }
 
+    /// @notice Retrieve a credential record for a subject + predicate type.
+    /// @dev Reverts if no credential exists. Returns live status (expiry evaluated at read-time).
+    /// @param subjectDID DID of the credential subject.
+    /// @param predicateType Predicate type identifier.
+    /// @return Credential record with live status.
     function getCredential(bytes32 subjectDID, bytes32 predicateType) external view returns (Credential memory) {
         Credential memory c = _credentials[subjectDID][predicateType];
         if (c.subjectDID == bytes32(0)) revert CredentialNotFound(subjectDID, predicateType);
         return _withLiveStatus(c);
     }
 
+    /// @notice Retrieve all credential records for a given DID.
+    /// @param subjectDID DID of the credential subject.
+    /// @return Array of Credential records with live status.
     function getCredentialsByDID(bytes32 subjectDID) external view returns (Credential[] memory) {
         bytes32[] memory types_ = _predicateTypesByDID[subjectDID];
         Credential[] memory out = new Credential[](types_.length);
@@ -100,6 +122,9 @@ contract CredentialRegistry is Initializable, AccessControlUpgradeable, UUPSUpgr
         return out;
     }
 
+    /// @notice Revoke a credential (irreversible). Restricted to VERIFIER_ROLE or ADMIN_ROLE.
+    /// @param subjectDID DID of the credential subject.
+    /// @param predicateType Predicate type identifier.
     function revokeCredential(bytes32 subjectDID, bytes32 predicateType) external {
         if (!(hasRole(VERIFIER_ROLE, msg.sender) || hasRole(ADMIN_ROLE, msg.sender))) {
             revert UnauthorizedCredentialWriter(msg.sender);
@@ -115,6 +140,10 @@ contract CredentialRegistry is Initializable, AccessControlUpgradeable, UUPSUpgr
         emit CredentialRevoked(subjectDID, predicateType, block.timestamp);
     }
 
+    /// @notice Check whether a credential is currently valid (expiry + revocation aware).
+    /// @param subjectDID DID of the credential subject.
+    /// @param predicateType Predicate type identifier.
+    /// @return True if the credential exists, is not revoked, not expired, and was written as valid.
     function isCredentialValid(bytes32 subjectDID, bytes32 predicateType) external view returns (bool) {
         Credential memory c = _credentials[subjectDID][predicateType];
         if (c.subjectDID == bytes32(0)) return false;
@@ -123,14 +152,10 @@ contract CredentialRegistry is Initializable, AccessControlUpgradeable, UUPSUpgr
         return c.valid;
     }
 
+    /// @notice Grant VERIFIER_ROLE to an address (admin only).
+    /// @param verifier Address to grant the verifier role to.
     function grantVerifier(address verifier) external onlyRole(ADMIN_ROLE) {
         _grantRole(VERIFIER_ROLE, verifier);
-    }
-
-    function _computeStatus(bool valid, uint256 expiresAt) internal view returns (CredentialStatus) {
-        if (!valid) return CredentialStatus.Expired;
-        if (expiresAt != 0 && block.timestamp > expiresAt) return CredentialStatus.Expired;
-        return CredentialStatus.Active;
     }
 
     function _withLiveStatus(Credential memory c) internal view returns (Credential memory) {
