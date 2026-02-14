@@ -19,9 +19,9 @@ Invalid operations revert with custom errors; no failure/rejection events are em
 
 | Event | Parameters | Emitted when |
 |-------|-----------|-------------|
-| `DIDRegisteredViaAttestation` | `subjectDID` (indexed), `attestationId` (indexed) | DID registered as part of attestation flow (skipped if already exists) |
-| `VCHashAnchoredViaAttestation` | `subjectDID` (indexed), `vcType` (indexed), `contentHash`, `attestationId` (indexed) | VC content hash anchored after verification |
-| `CredentialStatusUpdated` | `subjectDID` (indexed), `vcType` (indexed), `result`, `attestationId` (indexed), `timestamp` | Full shared-anchor flow completed; composite status signal for subscribers |
+| `DIDRegisteredViaAttestation` | `subjectDID` (indexed), `attestationId` (indexed) | DID registered as part of **positive** attestation flow (skipped if already exists; negative attestations do not trigger DID registration) |
+| `VCHashAnchoredViaAttestation` | `subjectDID` (indexed), `vcType` (indexed), `contentHash`, `attestationId` (indexed) | VC content hash anchored after **positive** attestation (negative attestations do not anchor hashes) |
+| `CredentialStatusUpdated` | `subjectDID` (indexed), `vcType` (indexed), `result`, `attestationId` (indexed), `timestamp` | **Positive** attestation shared-anchor flow completed; composite status signal for subscribers (negative attestations emit only `AttestationSubmitted` from base) |
 
 ### DIDRegistry
 
@@ -91,7 +91,7 @@ All invalid operations revert with typed custom errors. No failure-path events a
 ## Subscriber Guidance
 
 **For credential lifecycle tracking on the shared chain**, subscribe to:
-1. `CredentialStatusUpdated` on `AttestationVerifier` -- single event for each verified attestation with result
+1. `CredentialStatusUpdated` on `AttestationVerifier` -- emitted for **positive** attestations only; for negative results, subscribe to `AttestationSubmitted` on base
 2. `AnchorRevoked` on `VCHashAnchors` -- VC hash revocation (admin action)
 3. `DIDDeactivated` on `DIDRegistry` -- DID deactivation (controller action)
 

@@ -82,6 +82,8 @@ contract AttestationVerifier is BaseAttestationVerifier, UUPSUpgradeable, IAttes
     }
 
     /// @dev Hook: after successful verification, trigger Shared Anchor side-effects.
+    ///      Only positive attestations (result == true) trigger DID registration,
+    ///      hash anchoring, and credential events (F-01).
     ///      Decodes vcType and contentHash from predicateData per ADR-002 layout.
     function _onAttestationVerified(
         bytes32 attestationId,
@@ -89,16 +91,24 @@ contract AttestationVerifier is BaseAttestationVerifier, UUPSUpgradeable, IAttes
         bytes calldata predicateData,
         bool result
     ) internal override {
+        // F-01: negative attestations are stored (base) but do not trigger side-effects
+        if (!result) return;
+
         // Decode vcType and contentHash from predicateData (ADR-002 canonical layout):
         // predicateData[0] = result byte (used by base), [1:] = abi.encode(predicateType, ...)
         (,,,, bytes32 vcType, bytes32 contentHash,) =
             abi.decode(predicateData[1:], (bytes32, bool, uint256, uint256, bytes32, bytes32, bytes));
 
-        // 1) Register DID if not already known (best-effort; ignore revert if already registered)
+        // 1) Register DID if not already known
+        // F-03: only swallow DIDAlreadyRegistered; propagate unexpected errors
         try didRegistry.registerDID(subjectDID, address(this)) {
             emit DIDRegisteredViaAttestation(subjectDID, attestationId);
-        } catch {
-            // DID already registered — proceed
+        } catch (bytes memory reason) {
+            if (reason.length < 4 || bytes4(reason) != IDIDRegistry.DIDAlreadyRegistered.selector) {
+                assembly {
+                    revert(add(reason, 32), mload(reason))
+                }
+            }
         }
 
         // 2) Anchor VC content hash

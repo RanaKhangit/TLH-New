@@ -151,6 +151,60 @@ contract AttestationVerifierTest is Test {
         assertFalse(exists);
     }
 
+    // ---- F-01: negative attestation does NOT trigger side-effects ----
+
+    function testNegativeAttestationDoesNotRegisterDIDOrAnchorHash() public {
+        bytes32 attId = keccak256("att-neg");
+        bytes32 did = keccak256("did:tlh:clinician-neg");
+        bytes memory predicate = _buildPredicate(false, block.timestamp, block.timestamp + 365 days);
+        bytes memory sig = _sign(attId, did, predicate);
+
+        // Record logs to verify no shared-anchor events
+        vm.recordLogs();
+        verifier.submitAttestation(attId, did, predicate, sig);
+        Vm.Log[] memory logs = vm.getRecordedLogs();
+
+        // Only AttestationSubmitted should be emitted — NOT DID/VC/Status events
+        bytes32 didRegSig = keccak256("DIDRegisteredViaAttestation(bytes32,bytes32)");
+        bytes32 vcAnchorSig = keccak256("VCHashAnchoredViaAttestation(bytes32,bytes32,bytes32,bytes32)");
+        bytes32 credStatusSig = keccak256("CredentialStatusUpdated(bytes32,bytes32,bool,bytes32,uint256)");
+        for (uint256 i = 0; i < logs.length; i++) {
+            assertTrue(logs[i].topics[0] != didRegSig, "DIDRegisteredViaAttestation should NOT be emitted");
+            assertTrue(logs[i].topics[0] != vcAnchorSig, "VCHashAnchoredViaAttestation should NOT be emitted");
+            assertTrue(logs[i].topics[0] != credStatusSig, "CredentialStatusUpdated should NOT be emitted");
+        }
+
+        // DID should NOT be registered
+        vm.expectRevert(abi.encodeWithSelector(DIDRegistry.DIDNotFound.selector, did));
+        didRegistry.resolveDID(did);
+
+        // Attestation itself IS stored (base behavior)
+        (bool exists,,, bool result,) = verifier.verifyAttestation(attId);
+        assertTrue(exists);
+        assertFalse(result);
+    }
+
+    // ---- F-03: narrowed try/catch only swallows DIDAlreadyRegistered ----
+
+    function testPositiveAttestationDuplicateDIDProceeds() public {
+        bytes32 did = keccak256("did:tlh:clinician-dup");
+
+        // Pre-register the DID so the try/catch fires
+        vm.prank(admin);
+        didRegistry.registerDID(did, admin);
+
+        bytes32 attId = keccak256("att-dup-did");
+        bytes memory predicate = _buildPredicate(true, block.timestamp, block.timestamp + 365 days);
+        bytes memory sig = _sign(attId, did, predicate);
+
+        // Should succeed — DIDAlreadyRegistered is swallowed
+        verifier.submitAttestation(attId, did, predicate, sig);
+
+        // VC hash should still be anchored
+        (bytes32 hash,,) = vcAnchors.getAnchor(did, VC_TYPE);
+        assertEq(hash, CONTENT_HASH);
+    }
+
     // ---- upgrade authorization ----
 
     function testUpgradeOnlyUpgrader() public {
