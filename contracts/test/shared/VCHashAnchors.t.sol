@@ -4,6 +4,7 @@ pragma solidity ^0.8.20;
 import "forge-std/Test.sol";
 import {VCHashAnchors} from "../../src/shared/VCHashAnchors.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 
 contract VCHashAnchorsTest is Test {
     VCHashAnchors internal vc;
@@ -154,5 +155,25 @@ contract VCHashAnchorsTest is Test {
     function testGetHistoryEmptyForUnknown() public view {
         bytes32[] memory history = vc.getAnchorHistory(keccak256("did:unknown"), VC_TYPE);
         assertEq(history.length, 0);
+    }
+
+    // ---- upgrade authorization ----
+
+    function testUpgradeOnlyUpgrader() public {
+        VCHashAnchors newImpl = new VCHashAnchors();
+
+        // Stranger cannot upgrade
+        vm.prank(stranger);
+        vm.expectRevert();
+        vc.upgradeToAndCall(address(newImpl), "");
+
+        // Writer cannot upgrade
+        vm.prank(writer);
+        vm.expectRevert();
+        vc.upgradeToAndCall(address(newImpl), "");
+
+        // Admin (who has UPGRADER_ROLE) can upgrade
+        vm.prank(admin);
+        vc.upgradeToAndCall(address(newImpl), "");
     }
 }
