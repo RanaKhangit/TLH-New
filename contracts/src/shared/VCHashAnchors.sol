@@ -17,6 +17,12 @@ contract VCHashAnchors is Initializable, UUPSUpgradeable, AccessControlUpgradeab
     error UnauthorizedAnchorWriter(address caller);
     error AnchorNotFound(bytes32 subjectDID, bytes32 vcType);
     error AnchorAlreadyRevoked(bytes32 subjectDID, bytes32 vcType);
+    error ZeroAdminAddress();
+
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
+    }
 
     event HashAnchored(bytes32 indexed subjectDID, bytes32 indexed vcType, bytes32 contentHash, uint256 timestamp);
     event AnchorRevoked(bytes32 indexed subjectDID, bytes32 indexed vcType, uint256 timestamp);
@@ -36,6 +42,8 @@ contract VCHashAnchors is Initializable, UUPSUpgradeable, AccessControlUpgradeab
     /// @notice Initialize the contract (proxy).
     /// @param admin Admin address that receives roles.
     function initialize(address admin) external initializer {
+        if (admin == address(0)) revert ZeroAdminAddress();
+
         __AccessControl_init();
 
         _grantRole(DEFAULT_ADMIN_ROLE, admin);
@@ -49,9 +57,10 @@ contract VCHashAnchors is Initializable, UUPSUpgradeable, AccessControlUpgradeab
         if (!hasRole(ANCHOR_WRITER_ROLE, msg.sender)) revert UnauthorizedAnchorWriter(msg.sender);
 
         AnchorRecord storage rec = anchors[subjectDID][vcType];
+        if (rec.revoked) revert AnchorAlreadyRevoked(subjectDID, vcType);
+
         rec.contentHash = contentHash;
         rec.anchoredAt = block.timestamp;
-        rec.revoked = false;
 
         anchorHistory[subjectDID][vcType].push(contentHash);
 
