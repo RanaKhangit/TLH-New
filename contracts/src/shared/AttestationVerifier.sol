@@ -21,11 +21,21 @@ contract AttestationVerifier is BaseAttestationVerifier, UUPSUpgradeable, IAttes
     IVCHashAnchors public vcHashAnchors;
 
     // -------------------------
-    // Events (shared-anchor specific)
+    // Events (shared-anchor specific, success-path only)
     // -------------------------
     event DIDRegisteredViaAttestation(bytes32 indexed subjectDID, bytes32 indexed attestationId);
     event VCHashAnchoredViaAttestation(
         bytes32 indexed subjectDID, bytes32 indexed vcType, bytes32 contentHash, bytes32 indexed attestationId
+    );
+
+    /// @dev Emitted after the full shared-anchor flow completes (verify + DID + VC hash).
+    ///      Provides a single event subscribers can watch for credential status changes.
+    event CredentialStatusUpdated(
+        bytes32 indexed subjectDID,
+        bytes32 indexed vcType,
+        bool result,
+        bytes32 indexed attestationId,
+        uint256 timestamp
     );
 
     /// @notice Initialize the verifier (proxy).
@@ -72,16 +82,10 @@ contract AttestationVerifier is BaseAttestationVerifier, UUPSUpgradeable, IAttes
         bytes32 attestationId,
         bytes32 subjectDID,
         bytes calldata predicateData,
-        bool /*result*/
-    )
-        internal
-        override
-    {
+        bool result
+    ) internal override {
         // Decode vcType and contentHash from predicateData (ADR-002 canonical layout):
-        // predicateData = abi.encode(predicateType, result, checkedAt, expiresAt, vcType, contentHash, extra)
-        // Positions: skip first byte (result flag used by base), then ABI-decode from offset 1
-        // However, base contract uses predicateData[0] as result byte, and the rest is ABI-encoded.
-        // For simplicity and forward-compat, we decode starting from byte 1:
+        // predicateData[0] = result byte (used by base), [1:] = abi.encode(predicateType, ...)
         (,,,, bytes32 vcType, bytes32 contentHash,) =
             abi.decode(predicateData[1:], (bytes32, bool, uint256, uint256, bytes32, bytes32, bytes));
 
@@ -95,6 +99,9 @@ contract AttestationVerifier is BaseAttestationVerifier, UUPSUpgradeable, IAttes
         // 2) Anchor VC content hash
         vcHashAnchors.anchorHash(subjectDID, vcType, contentHash);
         emit VCHashAnchoredViaAttestation(subjectDID, vcType, contentHash, attestationId);
+
+        // 3) Emit composite status event for subscribers
+        emit CredentialStatusUpdated(subjectDID, vcType, result, attestationId, block.timestamp);
     }
 
     function _authorizeUpgrade(address) internal override onlyRole(UPGRADER_ROLE) {}
