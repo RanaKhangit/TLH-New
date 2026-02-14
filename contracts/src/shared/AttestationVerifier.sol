@@ -38,6 +38,11 @@ contract AttestationVerifier is BaseAttestationVerifier, UUPSUpgradeable, IAttes
         uint256 timestamp
     );
 
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
+    }
+
     /// @notice Initialize the verifier (proxy).
     /// @param admin Admin address for roles.
     /// @param didRegistry_ DID Registry contract address.
