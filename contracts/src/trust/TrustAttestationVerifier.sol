@@ -22,6 +22,11 @@ contract TrustAttestationVerifier is BaseAttestationVerifier, UUPSUpgradeable, I
         bytes32 indexed subjectDID, bytes32 indexed predicateType, bytes32 indexed attestationId
     );
 
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
+    }
+
     /// @notice Initialize the verifier (proxy).
     /// @param admin Admin for BaseAttestationVerifier roles.
     /// @param credentialRegistry_ CredentialRegistry contract address.
@@ -57,7 +62,8 @@ contract TrustAttestationVerifier is BaseAttestationVerifier, UUPSUpgradeable, I
         return (true, att.subjectDID, att.predicateHash, att.result, att.timestamp);
     }
 
-    /// @dev On trust chain, decode predicateData (ADR-002) and write to credential registry.
+    /// @dev On trust chain, decode predicateData (ADR-002) and write to credential registry
+    ///      only when the attestation result is positive (result == true).
     ///      predicateData layout: [0] = result byte (used by base), [1:] = abi.encode(predicateType, result, checkedAt, expiresAt, vcType, contentHash, extra)
     function _onAttestationVerified(
         bytes32 attestationId,
@@ -65,12 +71,14 @@ contract TrustAttestationVerifier is BaseAttestationVerifier, UUPSUpgradeable, I
         bytes calldata predicateData,
         bool result
     ) internal override {
-        // Decode predicateType and expiresAt from predicateData (skip result byte at [0])
-        (bytes32 predicateType,,, uint256 expiresAt,,,) =
-            abi.decode(predicateData[1:], (bytes32, bool, uint256, uint256, bytes32, bytes32, bytes));
+        if (result) {
+            // Decode predicateType and expiresAt from predicateData (skip result byte at [0])
+            (bytes32 predicateType,,, uint256 expiresAt,,,) =
+                abi.decode(predicateData[1:], (bytes32, bool, uint256, uint256, bytes32, bytes32, bytes));
 
-        credentialRegistry.writeCredential(subjectDID, predicateType, result, expiresAt, attestationId);
-        emit CredentialWrittenViaAttestation(subjectDID, predicateType, attestationId);
+            credentialRegistry.writeCredential(subjectDID, predicateType, result, expiresAt, attestationId);
+            emit CredentialWrittenViaAttestation(subjectDID, predicateType, attestationId);
+        }
     }
 
     /// @notice Update the credential registry address (admin only).
