@@ -30,6 +30,7 @@ Invalid operations revert with custom errors; no failure/rejection events are em
 | `DIDRegistered` | `did` (indexed), `controller` (indexed), `timestamp` | New DID registered |
 | `DIDDeactivated` | `did` (indexed), `timestamp` | DID deactivated by controller |
 | `DIDControllerUpdated` | `did` (indexed), `oldController` (indexed), `newController` (indexed) | DID controller changed |
+| `DIDRegistryUpdated` | `did` (indexed), `action` (indexed, uint8), `actor` (indexed), `timestamp` | Unified indexing event for all DID mutations (action: 1=REGISTER, 2=DEACTIVATE, 3=UPDATE_CONTROLLER) |
 
 ### VCHashAnchors
 
@@ -74,6 +75,7 @@ All invalid operations revert with typed custom errors. No failure-path events a
 - `DIDNotFound(bytes32 did)` -- DID not registered
 - `NotDIDController(bytes32 did, address caller)` -- caller is not controller
 - `DIDAlreadyDeactivated(bytes32 did)` -- DID already deactivated
+- `InvalidAdmin(address admin)` -- admin == address(0) in initializer
 
 ### VCHashAnchors
 - `UnauthorizedAnchorWriter(address caller)` -- caller lacks ANCHOR_WRITER_ROLE
@@ -94,6 +96,7 @@ All invalid operations revert with typed custom errors. No failure-path events a
 1. `CredentialStatusUpdated` on `AttestationVerifier` -- emitted for **positive** attestations only; for negative results, subscribe to `AttestationSubmitted` on base
 2. `AnchorRevoked` on `VCHashAnchors` -- VC hash revocation (admin action)
 3. `DIDDeactivated` on `DIDRegistry` -- DID deactivation (controller action)
+4. `DIDRegistryUpdated` on `DIDRegistry` -- unified indexing event for all DID mutations (register, deactivate, updateController)
 
 **For trust-chain credential tracking**, subscribe to:
 1. `CredentialWritten` on `CredentialRegistry` -- credential write/update with validity

@@ -36,6 +36,12 @@ contract DIDRegistryTest is Test {
         registry.initialize(admin);
     }
 
+    function testZeroAdminInitReverts() public {
+        DIDRegistry impl = new DIDRegistry();
+        vm.expectRevert(abi.encodeWithSelector(DIDRegistry.InvalidAdmin.selector, address(0)));
+        new ERC1967Proxy(address(impl), abi.encodeWithSelector(DIDRegistry.initialize.selector, address(0)));
+    }
+
     function testProxyInitializesRolesCorrectly() public view {
         assertTrue(registry.hasRole(registry.DEFAULT_ADMIN_ROLE(), admin));
         assertTrue(registry.hasRole(registry.REGISTRAR_ROLE(), admin));
@@ -55,6 +61,20 @@ contract DIDRegistryTest is Test {
         assertTrue(active);
         assertEq(registeredAt, block.timestamp);
         assertEq(updatedAt, block.timestamp);
+    }
+
+    function testRegisterDIDUpdatesLastUpdatedAtAndEmitsUnifiedEvent() public {
+        uint256 tsBefore = registry.lastUpdatedAt();
+        assertEq(tsBefore, 0);
+
+        vm.warp(1_700_000_100);
+        vm.prank(admin);
+
+        vm.expectEmit(true, true, true, true);
+        emit DIDRegistry.DIDRegistryUpdated(DID1, 1, admin, block.timestamp);
+        registry.registerDID(DID1, address(0xBEEF));
+
+        assertEq(registry.lastUpdatedAt(), 1_700_000_100);
     }
 
     function testRegisterDIDStrangerReverts() public {
@@ -94,6 +114,20 @@ contract DIDRegistryTest is Test {
         assertFalse(active);
     }
 
+    function testDeactivateDIDUpdatesLastUpdatedAtAndEmitsUnifiedEvent() public {
+        vm.prank(admin);
+        registry.registerDID(DID1, address(0xBEEF));
+
+        vm.warp(1_700_000_200);
+        vm.prank(address(0xBEEF));
+
+        vm.expectEmit(true, true, true, true);
+        emit DIDRegistry.DIDRegistryUpdated(DID1, 2, address(0xBEEF), block.timestamp);
+        registry.deactivateDID(DID1);
+
+        assertEq(registry.lastUpdatedAt(), 1_700_000_200);
+    }
+
     function testDeactivateDIDNotControllerReverts() public {
         vm.prank(admin);
         registry.registerDID(DID1, address(0xBEEF));
@@ -130,6 +164,20 @@ contract DIDRegistryTest is Test {
         assertEq(controller, address(0xCAFE));
     }
 
+    function testUpdateControllerUpdatesLastUpdatedAtAndEmitsUnifiedEvent() public {
+        vm.prank(admin);
+        registry.registerDID(DID1, address(0xBEEF));
+
+        vm.warp(1_700_000_300);
+        vm.prank(address(0xBEEF));
+
+        vm.expectEmit(true, true, true, true);
+        emit DIDRegistry.DIDRegistryUpdated(DID1, 3, address(0xBEEF), block.timestamp);
+        registry.updateController(DID1, address(0xCAFE));
+
+        assertEq(registry.lastUpdatedAt(), 1_700_000_300);
+    }
+
     function testUpdateControllerNotControllerReverts() public {
         vm.prank(admin);
         registry.registerDID(DID1, address(0xBEEF));
@@ -137,6 +185,30 @@ contract DIDRegistryTest is Test {
         vm.prank(stranger);
         vm.expectRevert(abi.encodeWithSelector(DIDRegistry.NotDIDController.selector, DID1, stranger));
         registry.updateController(DID1, address(0xCAFE));
+    }
+
+    // ---- lastUpdatedAt tracks across multiple mutations ----
+
+    function testLastUpdatedAtTracksAcrossMutations() public {
+        vm.warp(1_700_000_100);
+        vm.prank(admin);
+        registry.registerDID(DID1, address(0xBEEF));
+        assertEq(registry.lastUpdatedAt(), 1_700_000_100);
+
+        vm.warp(1_700_000_200);
+        vm.prank(admin);
+        registry.registerDID(DID2, address(0xCAFE));
+        assertEq(registry.lastUpdatedAt(), 1_700_000_200);
+
+        vm.warp(1_700_000_300);
+        vm.prank(address(0xBEEF));
+        registry.deactivateDID(DID1);
+        assertEq(registry.lastUpdatedAt(), 1_700_000_300);
+
+        vm.warp(1_700_000_400);
+        vm.prank(address(0xCAFE));
+        registry.updateController(DID2, address(0xDEAD));
+        assertEq(registry.lastUpdatedAt(), 1_700_000_400);
     }
 
     // ---- upgrade authorization ----

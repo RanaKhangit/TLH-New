@@ -1,8 +1,6 @@
 node_modules
 
 # Environment files (secrets)
-.env
-.env.*
 !.env.example
 
 # Key material
@@ -20,3 +18,4 @@ Thumbs.db
 # Foundry
 contracts/out/
 contracts/cache/
+config.bat

@@ -25,6 +25,9 @@ contract DIDRegistry is Initializable, UUPSUpgradeable, AccessControlUpgradeable
     /// @dev did => record
     mapping(bytes32 => DIDRecord) private _records;
 
+    /// @notice Timestamp of the last state-mutating DID operation (register, deactivate, updateController).
+    uint256 public lastUpdatedAt;
+
     // -------------------------
     // Custom errors
     // -------------------------
@@ -32,6 +35,7 @@ contract DIDRegistry is Initializable, UUPSUpgradeable, AccessControlUpgradeable
     error DIDNotFound(bytes32 did);
     error NotDIDController(bytes32 did, address caller);
     error DIDAlreadyDeactivated(bytes32 did);
+    error InvalidAdmin(address admin);
 
     // -------------------------
     // Events (success-path only)
@@ -39,6 +43,10 @@ contract DIDRegistry is Initializable, UUPSUpgradeable, AccessControlUpgradeable
     event DIDRegistered(bytes32 indexed did, address indexed controller, uint256 timestamp);
     event DIDDeactivated(bytes32 indexed did, uint256 timestamp);
     event DIDControllerUpdated(bytes32 indexed did, address indexed oldController, address indexed newController);
+
+    /// @notice Unified indexing event for all DID mutations.
+    /// @dev action: 1=REGISTER, 2=DEACTIVATE, 3=UPDATE_CONTROLLER.
+    event DIDRegistryUpdated(bytes32 indexed did, uint8 indexed action, address indexed actor, uint256 timestamp);
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
@@ -48,6 +56,8 @@ contract DIDRegistry is Initializable, UUPSUpgradeable, AccessControlUpgradeable
     /// @notice Initializes the registry.
     /// @param admin Address granted DEFAULT_ADMIN_ROLE, REGISTRAR_ROLE, and UPGRADER_ROLE.
     function initialize(address admin) external initializer {
+        if (admin == address(0)) revert InvalidAdmin(admin);
+
         __AccessControl_init();
 
         _grantRole(DEFAULT_ADMIN_ROLE, admin);
@@ -67,8 +77,10 @@ contract DIDRegistry is Initializable, UUPSUpgradeable, AccessControlUpgradeable
         r.active = true;
         r.registeredAt = block.timestamp;
         r.updatedAt = block.timestamp;
+        lastUpdatedAt = block.timestamp;
 
         emit DIDRegistered(did, controller, block.timestamp);
+        emit DIDRegistryUpdated(did, 1, msg.sender, block.timestamp);
     }
 
     /// @notice Resolve a DID.
@@ -99,8 +111,10 @@ contract DIDRegistry is Initializable, UUPSUpgradeable, AccessControlUpgradeable
 
         r.active = false;
         r.updatedAt = block.timestamp;
+        lastUpdatedAt = block.timestamp;
 
         emit DIDDeactivated(did, block.timestamp);
+        emit DIDRegistryUpdated(did, 2, msg.sender, block.timestamp);
     }
 
     /// @notice Update the controller for an existing DID.
@@ -115,12 +129,14 @@ contract DIDRegistry is Initializable, UUPSUpgradeable, AccessControlUpgradeable
         address old = r.controller;
         r.controller = newController;
         r.updatedAt = block.timestamp;
+        lastUpdatedAt = block.timestamp;
 
         emit DIDControllerUpdated(did, old, newController);
+        emit DIDRegistryUpdated(did, 3, msg.sender, block.timestamp);
     }
 
     /// @dev UUPS upgrade authorization.
     function _authorizeUpgrade(address) internal override onlyRole(UPGRADER_ROLE) {}
 
-    uint256[50] private __gap;
+    uint256[49] private __gap;
 }
