@@ -1,0 +1,49 @@
+{
+  "chainId": 11155111,
+  "network": "sepolia",
+  "deployer": "0x3B50966A8B71f277e90e14cdC31455F6Af3977e6",
+  "admin": "0x3B50966A8B71f277e90e14cdC31455F6Af3977e6",
+  "gas": {
+    "totalEthApprox": "0.0447"
+  },
+  "artifacts": {
+    "broadcastFile": "broadcast/DeploySepolia.s.sol/11155111/run-latest.json"
+  },
+  "contracts": {
+    "DIDRegistry": {
+      "implementation": "0xdeecd6a976d5999315dcf0cf8e7fa0e6ea887cd6",
+      "proxy": "0x6c6fa7f93860f16a1dfdd60ca3b83b703c597a0a",
+      "implDeployTx": "0xef57c1d91b6f7cbf460b5644b91765d67354e992af3ff97ffdab69e7e0bcf940",
+      "proxyDeployTx": "0x617557c8b6be40e7f25a87c045c86472e81bee396fe3674ec0d56c529fbde6d0",
+      "blockNumber": null
+    },
+    "VCHashAnchors": {
+      "implementation": "0x3b7803ba081228ea98626be219755b0295267013",
+      "proxy": "0x95d02ae28d6fa86f67f121ba36d9cbd363aafc68",
+      "implDeployTx": "0xe6db0d9d20305ffa366e4d1e5632a10dc3ab7ee57f33ca7adec90cf068e45701",
+      "proxyDeployTx": "0xedcae89621fe79eae7ee539ab741edd3efe213d0b4e3b9f531d28ccd3a913d61",
+      "blockNumber": null
+    },
+    "CredentialRegistry": {
+      "implementation": "0x94de2311e67abd4332c358b9c3a37e231f298249",
+      "proxy": "0xae4b71776fab8e431cee4874ad3a2a97588d89fb",
+      "implDeployTx": "0x268644086f921a103aed84d9a5dca455b4d2fc141b47b2d4474ec5752446f21a",
+      "proxyDeployTx": "0xa115ffc9e5ef06f078a70df7cd2dceca7f29389b7b20f5226233d2f8b84e929a",
+      "blockNumber": null
+    },
+    "TrustAttestationVerifier": {
+      "implementation": "0x893aad8b32e77845b2485e033c7031e31c13ec9b",
+      "proxy": "0x2ad7540b14585ebfb3c86604d1927b40e2efa5db",
+      "implDeployTx": "0x1d7f80de5e1defbed454c95400b7a1f51c21098b015204e030a92385db59d174",
+      "proxyDeployTx": "0xd1ad3f557709cfefaa567ddc4d400939b0bbfc4bc7786f1a15a25e2391b6e8e7",
+      "blockNumber": null
+    },
+    "AttestationVerifier": {
+      "implementation": "0x2ae518d86774c814a73ca03464b355a3a228ac8d",
+      "proxy": "0xce863e465f21df87ad9f0a2af838fac1750f08d2",
+      "implDeployTx": "0x0c98d44b7c9ffc3b4e4d3a607333751799b92b749bba697d258cf331a429fa14",
+      "proxyDeployTx": "0x6f320f87bd26e085013d9b815c38e0bae4c9f2d93409e698b9a58e1cdce39d24",
+      "blockNumber": null
+    }
+  }
+}
