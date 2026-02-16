@@ -15,6 +15,8 @@ import {IVCHashAnchors} from "../interfaces/IVCHashAnchors.sol";
 /// @dev UUPS upgradeable. Failure paths revert with custom errors (no rejection events).
 contract AttestationVerifier is BaseAttestationVerifier, UUPSUpgradeable, IAttestationVerifier {
     bytes32 public constant UPGRADER_ROLE = keccak256("UPGRADER_ROLE");
+    error InvalidDIDRegistry(address didRegistry);
+    error InvalidVCHashAnchors(address vcHashAnchors);
 
     // External dependencies configured via initializer (no hardcoded addresses)
     IDIDRegistry public didRegistry;
@@ -48,6 +50,9 @@ contract AttestationVerifier is BaseAttestationVerifier, UUPSUpgradeable, IAttes
     /// @param didRegistry_ DID Registry contract address.
     /// @param vcHashAnchors_ VC Hash Anchors contract address.
     function initialize(address admin, address didRegistry_, address vcHashAnchors_) external initializer {
+        if (didRegistry_ == address(0)) revert InvalidDIDRegistry(didRegistry_);
+        if (vcHashAnchors_ == address(0)) revert InvalidVCHashAnchors(vcHashAnchors_);
+
         __BaseAttestationVerifier_init(admin);
 
         _grantRole(UPGRADER_ROLE, admin);
@@ -104,7 +109,13 @@ contract AttestationVerifier is BaseAttestationVerifier, UUPSUpgradeable, IAttes
         try didRegistry.registerDID(subjectDID, address(this)) {
             emit DIDRegisteredViaAttestation(subjectDID, attestationId);
         } catch (bytes memory reason) {
-            if (reason.length < 4 || bytes4(reason) != IDIDRegistry.DIDAlreadyRegistered.selector) {
+            bytes4 errorSelector;
+            if (reason.length >= 4) {
+                assembly {
+                    errorSelector := mload(add(reason, 32))
+                }
+            }
+            if (errorSelector != IDIDRegistry.DIDAlreadyRegistered.selector) {
                 assembly {
                     revert(add(reason, 32), mload(reason))
                 }

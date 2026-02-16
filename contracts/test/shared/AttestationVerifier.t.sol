@@ -106,6 +106,47 @@ contract AttestationVerifierTest is Test {
         assertTrue(verifier.hasRole(verifier.SIGNER_ADMIN_ROLE(), admin));
     }
 
+    function testInitializeZeroDIDRegistryReverts() public {
+        AttestationVerifier avImpl = new AttestationVerifier();
+        vm.expectRevert(abi.encodeWithSelector(AttestationVerifier.InvalidDIDRegistry.selector, address(0)));
+        new ERC1967Proxy(
+            address(avImpl),
+            abi.encodeWithSelector(AttestationVerifier.initialize.selector, admin, address(0), address(vcAnchors))
+        );
+    }
+
+    function testInitializeZeroVCHashAnchorsReverts() public {
+        AttestationVerifier avImpl = new AttestationVerifier();
+        vm.expectRevert(abi.encodeWithSelector(AttestationVerifier.InvalidVCHashAnchors.selector, address(0)));
+        new ERC1967Proxy(
+            address(avImpl),
+            abi.encodeWithSelector(AttestationVerifier.initialize.selector, admin, address(didRegistry), address(0))
+        );
+    }
+
+    function testInitializeZeroAdminReverts() public {
+        AttestationVerifier avImpl = new AttestationVerifier();
+        vm.expectRevert();
+        new ERC1967Proxy(
+            address(avImpl),
+            abi.encodeWithSelector(
+                AttestationVerifier.initialize.selector, address(0), address(didRegistry), address(vcAnchors)
+            )
+        );
+    }
+
+    function testAddSignerZeroAddressReverts() public {
+        vm.prank(admin);
+        vm.expectRevert();
+        verifier.addSigner(address(0));
+    }
+
+    function testRemoveSignerZeroAddressReverts() public {
+        vm.prank(admin);
+        vm.expectRevert();
+        verifier.removeSigner(address(0));
+    }
+
     // ---- positive attestation: DID + VC hash + status event ----
 
     function testPositiveAttestationWritesDIDAndVCHash() public {

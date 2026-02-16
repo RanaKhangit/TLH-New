@@ -83,6 +83,23 @@ contract TrustAttestationVerifierTest is Test {
         impl.initialize(admin, address(registry));
     }
 
+    function testInitializeZeroRegistryReverts() public {
+        TrustAttestationVerifier verImpl = new TrustAttestationVerifier();
+        vm.expectRevert(abi.encodeWithSelector(TrustAttestationVerifier.InvalidCredentialRegistry.selector, address(0)));
+        new ERC1967Proxy(
+            address(verImpl), abi.encodeWithSelector(TrustAttestationVerifier.initialize.selector, admin, address(0))
+        );
+    }
+
+    function testInitializeZeroAdminReverts() public {
+        TrustAttestationVerifier verImpl = new TrustAttestationVerifier();
+        vm.expectRevert();
+        new ERC1967Proxy(
+            address(verImpl),
+            abi.encodeWithSelector(TrustAttestationVerifier.initialize.selector, address(0), address(registry))
+        );
+    }
+
     // ---- positive attestation: writeCredential called + event emitted ----
 
     function testPositiveAttestationWritesCredential() public {
@@ -170,6 +187,24 @@ contract TrustAttestationVerifierTest is Test {
         vm.prank(admin);
         verifier.setCredentialRegistry(address(0x1234));
         assertEq(address(verifier.credentialRegistry()), address(0x1234));
+    }
+
+    function testSetCredentialRegistryZeroAddressReverts() public {
+        vm.prank(admin);
+        vm.expectRevert(abi.encodeWithSelector(TrustAttestationVerifier.InvalidCredentialRegistry.selector, address(0)));
+        verifier.setCredentialRegistry(address(0));
+    }
+
+    function testAddSignerZeroAddressReverts() public {
+        vm.prank(admin);
+        vm.expectRevert();
+        verifier.addSigner(address(0));
+    }
+
+    function testRemoveSignerZeroAddressReverts() public {
+        vm.prank(admin);
+        vm.expectRevert();
+        verifier.removeSigner(address(0));
     }
 
     // ---- upgrade authorization ----

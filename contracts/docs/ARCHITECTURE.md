@@ -592,11 +592,10 @@ Added `via_ir = true` to `foundry.toml`:
 
 ## 12. What Remains (Mechanical)
 
-These are not architectural decisions — they are operational steps:
+These are operational closure items (not architecture decisions):
 
-1. **Grant REGISTRAR_ROLE** on DIDRegistry to AttestationVerifier proxy
-2. **Grant ANCHOR_WRITER_ROLE** on VCHashAnchors to AttestationVerifier proxy
-3. **Grant VERIFIER_ROLE** on CredentialRegistry to TrustAttestationVerifier proxy
-4. **Add signer** to both verifier whitelists via `addSigner(address)`
-5. **Pin FORK_BLOCK** after grants and re-run fork tests
-6. **CI/CD pipeline** — GitHub Actions for `forge build && forge test`
+1. Keep deployment reproducible using `script/DeploySepolia.s.sol` with `BOOTSTRAP_ROLES=true` and optional `ADMIN_PRIVATE_KEY`/`ATTESTATION_SIGNER`.
+2. Regenerate manifest via `tools/make-manifest-sepolia.js` after each deployment and verify `implDeployTx`/`proxyDeployTx` plus block numbers.
+3. Pin `FORK_BLOCK` for deterministic fork behavior suites and re-run `contracts/test/fork/*.sol`.
+4. Keep CI green for both `contracts` and `frontend` via `.github/workflows/ci.yml`.
+5. Distinct trust-chain evidence is now available on `chainId 31338`; complete hosted private-chain rollout and CCIP implementation/end-to-end tests for final production closure.

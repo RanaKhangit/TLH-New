@@ -1,0 +1,25 @@
+{
+  "chainId": 31338,
+  "network": "trust-local",
+  "deployer": "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266",
+  "admin": "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266",
+  "artifacts": {
+    "broadcastFile": "broadcast/DeployTrustChainLocal.s.sol/31338/run-latest.json"
+  },
+  "contracts": {
+    "CredentialRegistry": {
+      "implementation": "0x5fbdb2315678afecb367f032d93f642f64180aa3",
+      "proxy": "0x9fe46736679d2d9a65f0992f2272de9f3c7fa6e0",
+      "implDeployTx": "0xb911a9ccc0d407e558377b04f6f08320d78cf3f18e7974374fba8497a2643a99",
+      "proxyDeployTx": "0x253f79da6e2e62a688a3d50480bd10fcef787bfac8669279626d1ff5e2b50980",
+      "blockNumber": 4
+    },
+    "TrustAttestationVerifier": {
+      "implementation": "0xe7f1725e7734ce288f8367e1bb143e90bb3f0512",
+      "proxy": "0xcf7ed3acca5a467e9e704c703e8d87f634fb0fc9",
+      "implDeployTx": "0x2afad70d6d4a0235fa3c125486ee39e67868085e3dcd3da5a15f982ad6a4b67a",
+      "proxyDeployTx": "0x3ec231c73bada03d6b81125a772c9640e1a38493c7fcd26e4f6a2675404f851f",
+      "blockNumber": 3
+    }
+  }
+}

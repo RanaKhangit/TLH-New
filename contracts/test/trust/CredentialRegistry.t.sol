@@ -45,6 +45,12 @@ contract CredentialRegistryTest is Test {
         registry.initialize(admin);
     }
 
+    function testZeroAdminInitReverts() public {
+        CredentialRegistry impl = new CredentialRegistry();
+        vm.expectRevert(abi.encodeWithSelector(CredentialRegistry.InvalidAdmin.selector, address(0)));
+        new ERC1967Proxy(address(impl), abi.encodeWithSelector(CredentialRegistry.initialize.selector, address(0)));
+    }
+
     // ---- writeCredential ----
 
     function testWriteCredentialHappyPath() public {
@@ -301,5 +307,11 @@ contract CredentialRegistryTest is Test {
         vm.prank(newVerifier);
         registry.writeCredential(DID2, PRED_GMC, true, block.timestamp + 365 days, ATT_ID1);
         assertTrue(registry.isCredentialValid(DID2, PRED_GMC));
+    }
+
+    function testGrantVerifierZeroAddressReverts() public {
+        vm.prank(admin);
+        vm.expectRevert(abi.encodeWithSelector(CredentialRegistry.InvalidVerifier.selector, address(0)));
+        registry.grantVerifier(address(0));
     }
 }
