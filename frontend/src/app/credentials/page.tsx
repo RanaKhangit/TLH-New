@@ -8,7 +8,6 @@ import {
   formatTimestampRelative,
   formatBytes32,
   toBytes32,
-  isValidBytes32,
   credentialStatusLabel,
 } from "@/lib/utils";
 

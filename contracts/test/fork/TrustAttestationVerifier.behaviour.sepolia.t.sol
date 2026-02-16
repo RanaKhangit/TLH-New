@@ -22,7 +22,11 @@ interface ITrustAttestationVerifierWithDeps is IAttestationVerifier {
 }
 
 interface ICredentialRegistryRead {
-    enum CredentialStatus { Active, Expired, Revoked }
+    enum CredentialStatus {
+        Active,
+        Expired,
+        Revoked
+    }
 
     struct Credential {
         bytes32 subjectDID;
@@ -42,6 +46,7 @@ interface ICredentialRegistryRead {
 contract TrustAttestationVerifierForkBehaviour is Test {
     // --- Sepolia deployed proxy ---
     address constant TRUST_ATTESTATION_VERIFIER_PROXY = 0x2Ad7540B14585ebFB3c86604d1927b40e2eFa5db;
+    uint256 constant DEFAULT_FORK_BLOCK = 10273621;
 
     // --- Domain constant (must match contract) ---
     string constant DOMAIN = "TLH_ATTESTATION_V1";
@@ -55,8 +60,12 @@ contract TrustAttestationVerifierForkBehaviour is Test {
     error ExpiredAttestation(uint256 expiresAt, uint256 nowTs);
 
     // --- Events ---
-    event AttestationSubmitted(bytes32 indexed attestationId, bytes32 indexed subjectDID, bool result, uint256 timestamp);
-    event CredentialWrittenViaAttestation(bytes32 indexed subjectDID, bytes32 indexed predicateType, bytes32 indexed attestationId);
+    event AttestationSubmitted(
+        bytes32 indexed attestationId, bytes32 indexed subjectDID, bool result, uint256 timestamp
+    );
+    event CredentialWrittenViaAttestation(
+        bytes32 indexed subjectDID, bytes32 indexed predicateType, bytes32 indexed attestationId
+    );
 
     ITrustAttestationVerifierWithDeps verifier;
     ICredentialRegistryRead credReg;
@@ -64,18 +73,33 @@ contract TrustAttestationVerifierForkBehaviour is Test {
     // Provide RPC via env: SEPOLIA_RPC_URL
     function setUp() public {
         string memory rpc = vm.envString("SEPOLIA_RPC_URL");
-        uint256 forkBlock = vm.envUint("FORK_BLOCK"); // pin determinism
+        uint256 forkBlock = vm.envOr("FORK_BLOCK", DEFAULT_FORK_BLOCK); // pin determinism
         vm.createSelectFork(rpc, forkBlock);
 
         verifier = ITrustAttestationVerifierWithDeps(TRUST_ATTESTATION_VERIFIER_PROXY);
         credReg = ICredentialRegistryRead(verifier.credentialRegistry());
     }
 
+    function _loadSignerPk() internal view returns (uint256) {
+        if (vm.envExists("SIGNER_PK")) {
+            return vm.envUint("SIGNER_PK");
+        }
+        if (vm.envExists("DEPLOYER_PRIVATE_KEY")) {
+            string memory pk = vm.envString("DEPLOYER_PRIVATE_KEY");
+            return vm.parseUint(pk);
+        }
+        revert("SIGNER_PK or DEPLOYER_PRIVATE_KEY required");
+    }
+
     // ----------------------------
     // Helpers
     // ----------------------------
 
-    function _digest(bytes32 attestationId, bytes32 subjectDID, bytes memory predicateData) internal view returns (bytes32) {
+    function _digest(bytes32 attestationId, bytes32 subjectDID, bytes memory predicateData)
+        internal
+        view
+        returns (bytes32)
+    {
         bytes32 inner = keccak256(
             abi.encodePacked(
                 DOMAIN,
@@ -186,7 +210,7 @@ contract TrustAttestationVerifierForkBehaviour is Test {
 
     // Storage-only: result=false so _onAttestationVerified returns immediately (no CredentialRegistry write).
     function test_HappyPath_StorageOnly_SubmitAndVerify() public {
-        uint256 signerPk = vm.envUint("SIGNER_PK");
+        uint256 signerPk = _loadSignerPk();
         address signer = vm.addr(signerPk);
 
         bytes32 attestationId = keccak256(abi.encodePacked("trust-att-storage", signer, block.number));
@@ -195,7 +219,8 @@ contract TrustAttestationVerifierForkBehaviour is Test {
         bytes32 predicateType = keccak256("GMC_REGISTERED");
         bytes32 contentHash = keccak256("trust-content");
 
-        bytes memory predicateData = _makePredicateData(false, false, block.timestamp, 0, predicateType, contentHash, "");
+        bytes memory predicateData =
+            _makePredicateData(false, false, block.timestamp, 0, predicateType, contentHash, "");
 
         bytes32 digest = _digest(attestationId, subjectDID, predicateData);
         bytes memory sig = _sign(signerPk, digest);
@@ -205,7 +230,8 @@ contract TrustAttestationVerifierForkBehaviour is Test {
 
         verifier.submitAttestation(attestationId, subjectDID, predicateData, sig);
 
-        (bool exists, bytes32 gotDID, bytes32 predicateHash, bool result, uint256 ts) = verifier.verifyAttestation(attestationId);
+        (bool exists, bytes32 gotDID, bytes32 predicateHash, bool result, uint256 ts) =
+            verifier.verifyAttestation(attestationId);
 
         assertTrue(exists);
         assertEq(gotDID, subjectDID);
@@ -217,7 +243,7 @@ contract TrustAttestationVerifierForkBehaviour is Test {
     // Side-effects: result=true triggers credentialRegistry.writeCredential().
     // Expected to revert until CredentialRegistry grants VERIFIER_ROLE to TrustAttestationVerifier proxy.
     function test_HappyPath_SideEffects_SubmitAndVerify() public {
-        uint256 signerPk = vm.envUint("SIGNER_PK");
+        uint256 signerPk = _loadSignerPk();
         address signer = vm.addr(signerPk);
 
         bytes32 attestationId = keccak256(abi.encodePacked("trust-att-happy", signer, block.number));
@@ -237,7 +263,8 @@ contract TrustAttestationVerifierForkBehaviour is Test {
         verifier.submitAttestation(attestationId, subjectDID, predicateData, sig);
 
         // Verify attestation stored
-        (bool exists, bytes32 gotDID, bytes32 predicateHash, bool result, uint256 ts) = verifier.verifyAttestation(attestationId);
+        (bool exists, bytes32 gotDID, bytes32 predicateHash, bool result, uint256 ts) =
+            verifier.verifyAttestation(attestationId);
 
         assertTrue(exists);
         assertEq(gotDID, subjectDID);
@@ -262,7 +289,7 @@ contract TrustAttestationVerifierForkBehaviour is Test {
     // ----------------------------
 
     function test_Revert_DuplicateAttestation() public {
-        uint256 signerPk = vm.envUint("SIGNER_PK");
+        uint256 signerPk = _loadSignerPk();
 
         bytes32 attestationId = keccak256("trust-att-dup");
         bytes32 subjectDID = keccak256("did:tlh:trust-dup");

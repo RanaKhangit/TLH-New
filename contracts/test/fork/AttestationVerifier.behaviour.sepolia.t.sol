@@ -39,6 +39,7 @@ interface IVCHashAnchorsRead {
 contract AttestationVerifierForkBehaviour is Test {
     // --- Sepolia deployed proxy ---
     address constant ATTESTATION_VERIFIER_PROXY = 0xCE863E465f21Df87Ad9F0A2af838Fac1750F08d2;
+    uint256 constant DEFAULT_FORK_BLOCK = 10273621;
 
     // --- Domain constant (must match contract) ---
     string constant DOMAIN = "TLH_ATTESTATION_V1";
@@ -52,7 +53,9 @@ contract AttestationVerifierForkBehaviour is Test {
     error ExpiredAttestation(uint256 expiresAt, uint256 nowTs);
 
     // --- Event (must match) ---
-    event AttestationSubmitted(bytes32 indexed attestationId, bytes32 indexed subjectDID, bool result, uint256 timestamp);
+    event AttestationSubmitted(
+        bytes32 indexed attestationId, bytes32 indexed subjectDID, bool result, uint256 timestamp
+    );
 
     IAttestationVerifierWithDeps verifier;
     IDIDRegistryRead did;
@@ -61,7 +64,7 @@ contract AttestationVerifierForkBehaviour is Test {
     // Provide RPC via env: SEPOLIA_RPC_URL
     function setUp() public {
         string memory rpc = vm.envString("SEPOLIA_RPC_URL");
-        uint256 forkBlock = vm.envUint("FORK_BLOCK"); // pin determinism
+        uint256 forkBlock = vm.envOr("FORK_BLOCK", DEFAULT_FORK_BLOCK); // pin determinism
         vm.createSelectFork(rpc, forkBlock);
 
         verifier = IAttestationVerifierWithDeps(ATTESTATION_VERIFIER_PROXY);
@@ -69,11 +72,26 @@ contract AttestationVerifierForkBehaviour is Test {
         vca = IVCHashAnchorsRead(verifier.vcHashAnchors());
     }
 
+    function _loadSignerPk() internal view returns (uint256) {
+        if (vm.envExists("SIGNER_PK")) {
+            return vm.envUint("SIGNER_PK");
+        }
+        if (vm.envExists("DEPLOYER_PRIVATE_KEY")) {
+            string memory pk = vm.envString("DEPLOYER_PRIVATE_KEY");
+            return vm.parseUint(pk);
+        }
+        revert("SIGNER_PK or DEPLOYER_PRIVATE_KEY required");
+    }
+
     // ----------------------------
     // Helpers
     // ----------------------------
 
-    function _digest(bytes32 attestationId, bytes32 subjectDID, bytes memory predicateData) internal view returns (bytes32) {
+    function _digest(bytes32 attestationId, bytes32 subjectDID, bytes memory predicateData)
+        internal
+        view
+        returns (bytes32)
+    {
         bytes32 inner = keccak256(
             abi.encodePacked(
                 DOMAIN,
@@ -106,7 +124,9 @@ contract AttestationVerifierForkBehaviour is Test {
         bytes memory extra
     ) internal pure returns (bytes memory) {
         bytes memory tail = abi.encode(bytes32(0), abiResult, issuedAt, expiresAt, vcType, contentHash, extra);
-        bytes memory prefix = new bytes(1); prefix[0] = resultByte ? bytes1(0x01) : bytes1(0x00); return bytes.concat(prefix, tail);
+        bytes memory prefix = new bytes(1);
+        prefix[0] = resultByte ? bytes1(0x01) : bytes1(0x00);
+        return bytes.concat(prefix, tail);
     }
 
     // ----------------------------
@@ -182,7 +202,7 @@ contract AttestationVerifierForkBehaviour is Test {
 
     // Storage-only happy path: result=false so _onAttestationVerified returns immediately (no cross-contract side-effects).
     function test_HappyPath_StorageOnly_SubmitAndVerify() public {
-        uint256 signerPk = vm.envUint("SIGNER_PK");
+        uint256 signerPk = _loadSignerPk();
         address signer = vm.addr(signerPk);
 
         bytes32 attestationId = keccak256(abi.encodePacked("att-storage", signer, block.number));
@@ -201,7 +221,8 @@ contract AttestationVerifierForkBehaviour is Test {
 
         verifier.submitAttestation(attestationId, subjectDID, predicateData, sig);
 
-        (bool exists, bytes32 gotDID, bytes32 predicateHash, bool result, uint256 ts) = verifier.verifyAttestation(attestationId);
+        (bool exists, bytes32 gotDID, bytes32 predicateHash, bool result, uint256 ts) =
+            verifier.verifyAttestation(attestationId);
 
         assertTrue(exists);
         assertEq(gotDID, subjectDID);
@@ -213,7 +234,7 @@ contract AttestationVerifierForkBehaviour is Test {
     // Side-effect happy path: result=true triggers _onAttestationVerified cross-contract calls.
     // Expected to revert until DIDRegistry grants the required role to the AttestationVerifier proxy.
     function test_HappyPath_SideEffects_SubmitAndVerify() public {
-        uint256 signerPk = vm.envUint("SIGNER_PK");
+        uint256 signerPk = _loadSignerPk();
         address signer = vm.addr(signerPk);
 
         bytes32 attestationId = keccak256(abi.encodePacked("att-happy", signer, block.number));
@@ -232,7 +253,8 @@ contract AttestationVerifierForkBehaviour is Test {
 
         verifier.submitAttestation(attestationId, subjectDID, predicateData, sig);
 
-        (bool exists, bytes32 gotDID, bytes32 predicateHash, bool result, uint256 ts) = verifier.verifyAttestation(attestationId);
+        (bool exists, bytes32 gotDID, bytes32 predicateHash, bool result, uint256 ts) =
+            verifier.verifyAttestation(attestationId);
 
         assertTrue(exists);
         assertEq(gotDID, subjectDID);
@@ -252,7 +274,7 @@ contract AttestationVerifierForkBehaviour is Test {
     }
 
     function test_Revert_DuplicateAttestation() public {
-        uint256 signerPk = vm.envUint("SIGNER_PK");
+        uint256 signerPk = _loadSignerPk();
 
         bytes32 attestationId = keccak256("att-dup");
         bytes32 subjectDID = keccak256("did:tlh:dup");

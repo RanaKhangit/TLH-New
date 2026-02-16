@@ -1,43 +1,39 @@
-// tools/make-manifest-sepolia.js
 const fs = require("fs");
 const path = require("path");
+
+const chainId = process.env.CHAIN_ID || "31338";
+const network = process.env.NETWORK_NAME || "trust-local";
+const deployerFallback =
+  process.env.DEPLOYER_ADDRESS || "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266";
+const adminFallback =
+  process.env.ADMIN_ADDRESS || "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266";
 
 const broadcastPath = path.join(
   __dirname,
   "..",
   "broadcast",
-  "DeploySepolia.s.sol",
-  "11155111",
+  "DeployTrustChainLocal.s.sol",
+  chainId,
   "run-latest.json"
 );
-const outPath = path.join(__dirname, "..", "deployment-manifest.sepolia.json");
-const ADMIN_ADDRESS =
-  process.env.ADMIN_ADDRESS || "0x3B50966A8B71f277e90e14cdC31455F6Af3977e6";
+const outPath = path.join(__dirname, "..", `deployment-manifest.${network}.json`);
 
-const SUITE = [
-  "DIDRegistry",
-  "VCHashAnchors",
-  "CredentialRegistry",
-  "TrustAttestationVerifier",
-  "AttestationVerifier",
-];
+const SUITE = ["CredentialRegistry", "TrustAttestationVerifier"];
 
 function isAddress(v) {
   return typeof v === "string" && /^0x[a-fA-F0-9]{40}$/.test(v);
 }
 
-function toLowerAddress(v) {
-  return isAddress(v) ? v.toLowerCase() : null;
-}
-
 function toDec(value) {
   if (value == null) return null;
   if (typeof value === "number") return value;
-  if (typeof value === "string" && value.startsWith("0x")) {
-    return parseInt(value, 16);
-  }
+  if (typeof value === "string" && value.startsWith("0x")) return parseInt(value, 16);
   const n = Number(value);
   return Number.isNaN(n) ? null : n;
+}
+
+function toLowerAddress(v) {
+  return isAddress(v) ? v.toLowerCase() : null;
 }
 
 function mustAddress(v, label) {
@@ -84,16 +80,15 @@ function findProxyForImplementation(implementationAddress) {
 
 const deployer =
   creates.find((c) => c.from)?.from?.toLowerCase() ||
-  "0x3B50966A8B71f277e90e14cdC31455F6Af3977e6".toLowerCase();
+  mustAddress(deployerFallback, "DEPLOYER_ADDRESS");
 
 const manifest = {
-  chainId: 11155111,
-  network: "sepolia",
+  chainId: Number(chainId),
+  network,
   deployer,
-  admin: mustAddress(ADMIN_ADDRESS, "ADMIN_ADDRESS"),
-  gas: { totalEthApprox: "0.0447" },
+  admin: mustAddress(adminFallback, "ADMIN_ADDRESS"),
   artifacts: {
-    broadcastFile: "broadcast/DeploySepolia.s.sol/11155111/run-latest.json",
+    broadcastFile: `broadcast/DeployTrustChainLocal.s.sol/${chainId}/run-latest.json`,
   },
   contracts: {},
 };

@@ -28,6 +28,8 @@ abstract contract BaseAttestationVerifier is Initializable, AccessControlUpgrade
     error EmptyPredicateData();
     error ResultMismatch();
     error ExpiredAttestation(uint256 expiresAt, uint256 nowTs);
+    error InvalidAdmin(address admin);
+    error InvalidSigner(address signer);
 
     // -------------------------
     // Events (success-path only)
@@ -58,6 +60,8 @@ abstract contract BaseAttestationVerifier is Initializable, AccessControlUpgrade
     // -------------------------
     /// @param admin Address granted DEFAULT_ADMIN_ROLE, ADMIN_ROLE, and SIGNER_ADMIN_ROLE.
     function __BaseAttestationVerifier_init(address admin) internal onlyInitializing {
+        if (admin == address(0)) revert InvalidAdmin(admin);
+
         __AccessControl_init();
         _grantRole(DEFAULT_ADMIN_ROLE, admin);
         _grantRole(ADMIN_ROLE, admin);
@@ -70,6 +74,7 @@ abstract contract BaseAttestationVerifier is Initializable, AccessControlUpgrade
     /// @notice Whitelist a signer address for attestation verification.
     /// @param signer Address to add to the signer whitelist.
     function addSigner(address signer) external onlyRole(SIGNER_ADMIN_ROLE) {
+        if (signer == address(0)) revert InvalidSigner(signer);
         signerWhitelist[signer] = true;
         emit SignerAdded(signer);
     }
@@ -77,6 +82,7 @@ abstract contract BaseAttestationVerifier is Initializable, AccessControlUpgrade
     /// @notice Remove a signer address from the whitelist.
     /// @param signer Address to remove from the signer whitelist.
     function removeSigner(address signer) external onlyRole(SIGNER_ADMIN_ROLE) {
+        if (signer == address(0)) revert InvalidSigner(signer);
         signerWhitelist[signer] = false;
         emit SignerRemoved(signer);
     }
