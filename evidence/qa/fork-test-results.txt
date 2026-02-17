@@ -1,0 +1,25 @@
+No files changed, compilation skipped
+
+Ran 8 tests for test/fork/AttestationVerifier.behaviour.sepolia.t.sol:AttestationVerifierForkBehaviour
+[PASS] test_HappyPath_SideEffects_SubmitAndVerify() (gas: 304558)
+[PASS] test_HappyPath_StorageOnly_SubmitAndVerify() (gas: 126642)
+[PASS] test_Revert_DuplicateAttestation() (gas: 124675)
+[PASS] test_Revert_EmptyPredicateData() (gas: 18447)
+[PASS] test_Revert_ExpiredAttestation_WhenPositiveAndExpired() (gas: 22475)
+[PASS] test_Revert_InvalidSignature_ZeroRecovered() (gas: 21843)
+[PASS] test_Revert_ResultMismatch() (gas: 21876)
+[PASS] test_Revert_UnauthorizedSigner_WhenSignatureValidButNotWhitelisted() (gas: 30079)
+Suite result: ok. 8 passed; 0 failed; 0 skipped; finished in 110.19ms (10.90ms CPU time)
+
+Ran 8 tests for test/fork/TrustAttestationVerifier.behaviour.sepolia.t.sol:TrustAttestationVerifierForkBehaviour
+[PASS] test_HappyPath_SideEffects_SubmitAndVerify() (gas: 354841)
+[PASS] test_HappyPath_StorageOnly_SubmitAndVerify() (gas: 125814)
+[PASS] test_Revert_DuplicateAttestation() (gas: 124029)
+[PASS] test_Revert_EmptyPredicateData() (gas: 18419)
+[PASS] test_Revert_ExpiredAttestation_WhenPositiveAndExpired() (gas: 22294)
+[PASS] test_Revert_InvalidSignature_ZeroRecovered() (gas: 21339)
+[PASS] test_Revert_ResultMismatch() (gas: 21642)
+[PASS] test_Revert_UnauthorizedSigner_WhenSignatureValidButNotWhitelisted() (gas: 29563)
+Suite result: ok. 8 passed; 0 failed; 0 skipped; finished in 110.81ms (11.09ms CPU time)
+
+Ran 2 test suites in 1.13s (221.00ms CPU time): 16 tests passed, 0 failed, 0 skipped (16 total tests)

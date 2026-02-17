@@ -12,6 +12,7 @@ import {ICredentialRegistry} from "../interfaces/ICredentialRegistry.sol";
 /// @dev UUPS upgradeable. Failure paths revert with custom errors (no rejection events).
 contract TrustAttestationVerifier is BaseAttestationVerifier, UUPSUpgradeable, IAttestationVerifier {
     bytes32 public constant UPGRADER_ROLE = keccak256("UPGRADER_ROLE");
+    error InvalidCredentialRegistry(address credentialRegistry);
 
     ICredentialRegistry public credentialRegistry;
 
@@ -31,6 +32,8 @@ contract TrustAttestationVerifier is BaseAttestationVerifier, UUPSUpgradeable, I
     /// @param admin Admin for BaseAttestationVerifier roles.
     /// @param credentialRegistry_ CredentialRegistry contract address.
     function initialize(address admin, address credentialRegistry_) external initializer {
+        if (credentialRegistry_ == address(0)) revert InvalidCredentialRegistry(credentialRegistry_);
+
         __BaseAttestationVerifier_init(admin);
 
         _grantRole(UPGRADER_ROLE, admin);
@@ -83,6 +86,7 @@ contract TrustAttestationVerifier is BaseAttestationVerifier, UUPSUpgradeable, I
 
     /// @notice Update the credential registry address (admin only).
     function setCredentialRegistry(address credentialRegistry_) external onlyRole(ADMIN_ROLE) {
+        if (credentialRegistry_ == address(0)) revert InvalidCredentialRegistry(credentialRegistry_);
         credentialRegistry = ICredentialRegistry(credentialRegistry_);
     }
 

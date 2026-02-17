@@ -39,6 +39,8 @@ contract CredentialRegistry is Initializable, AccessControlUpgradeable, UUPSUpgr
     error UnauthorizedCredentialWriter(address caller);
     error CredentialNotFound(bytes32 subjectDID, bytes32 predicateType);
     error CredentialAlreadyRevoked(bytes32 subjectDID, bytes32 predicateType);
+    error InvalidAdmin(address admin);
+    error InvalidVerifier(address verifier);
 
     event CredentialWritten(
         bytes32 indexed subjectDID, bytes32 indexed predicateType, bool valid, bytes32 attestationId, uint256 timestamp
@@ -54,6 +56,8 @@ contract CredentialRegistry is Initializable, AccessControlUpgradeable, UUPSUpgr
     /// @notice Initialize the registry (proxy).
     /// @param admin Address granted DEFAULT_ADMIN_ROLE, ADMIN_ROLE, and UPGRADER_ROLE.
     function initialize(address admin) external initializer {
+        if (admin == address(0)) revert InvalidAdmin(admin);
+
         __AccessControl_init();
 
         _grantRole(DEFAULT_ADMIN_ROLE, admin);
@@ -155,6 +159,7 @@ contract CredentialRegistry is Initializable, AccessControlUpgradeable, UUPSUpgr
     /// @notice Grant VERIFIER_ROLE to an address (admin only).
     /// @param verifier Address to grant the verifier role to.
     function grantVerifier(address verifier) external onlyRole(ADMIN_ROLE) {
+        if (verifier == address(0)) revert InvalidVerifier(verifier);
         _grantRole(VERIFIER_ROLE, verifier);
     }
 

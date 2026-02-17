@@ -1,0 +1,8 @@
+{
+  "lib\\ccip": {
+    "tag": {
+      "name": "v2.9.0",
+      "rev": "065ef85b5fa52bb4583ebad9e51c20a977b64e7a"
+    }
+  }
+}

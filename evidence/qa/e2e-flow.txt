@@ -1,0 +1,47 @@
+============================================
+  TLH E2E MANUAL FLOW - QA-4
+  Date: 2026-02-16
+  Network: Sepolia (Chain ID 11155111)
+  Admin: 0x3B50966A8B71f277e90e14cdC31455F6Af3977e6
+============================================
+
+--- Role Configuration (Pre-E2E) ---
+TX: grantVerifier(TrustAttestationVerifier) on CredentialRegistry
+  Hash: 0x35189bc41c15742e54162989df66c4758aad7af223bbe5b200c5c590e6116260
+  Status: SUCCESS
+
+TX: addSigner(admin) on AttestationVerifier
+  Hash: 0x25f7c977d6dc450f58c8b751d61f93262874456da5ebe3dc3c1948ae4e93b31e
+  Status: SUCCESS
+
+TX: addSigner(admin) on TrustAttestationVerifier
+  Hash: 0xf4c87665cf9dd8fd91b69b6e0fa291d60ac9a515d25201dd4a30da1891e0fd49
+  Status: SUCCESS
+
+--- Step 1: Register DID ---
+  Subject: did:tlh:qa-e2e-20260216
+  DID Hash: 0xe881d00a86c4cebbca13d23d296398afe09aea19227981d9365c877822aff10f
+  TX: 0xe2688321d353aa91cc19a8483a6f78eb240f992eb06e7009ca70607cd5c84c4b
+  Status: SUCCESS
+  Verify: controller=0x3B50966A8B71f277e90e14cdC31455F6Af3977e6, active=true
+
+--- Step 2: Anchor VC Hash ---
+  VC Type: GMC_LICENSE (0x9559d048b22388dc7a323029df36d4b5c45b7dde3680ae30adb8eb67983aaabc)
+  Content Hash: 0xa6369bca324bd7a0bb0380d0bb3f17e44405b176dce1f84fa1495fc2ebc106eb
+  TX: 0xa812e21cc02441ddf7c848bf2b55c86f17d93b3926cccd09a6a0bf7bd961f2e2
+  Status: SUCCESS
+  Verify: contentHash matches, anchoredAt=1771257996, revoked=false
+
+--- Step 3: Write Credential ---
+  Predicate: GMC_REGISTERED (0x62a482f5b5a38130484e1f4bd6647fa97067678ef1c24e648995445a9ab87317)
+  Valid: true, Expires: 1802794008 (+1yr)
+  TX: 0x7d83ddcd700e28361d07d9a5ed904168557eccdd75f831dbf6fbf53298e3b477
+  Status: SUCCESS
+
+--- Step 4: Full Verification ---
+  4a. resolveDID: controller=admin, active=true, registered ✅
+  4b. getAnchor: contentHash=correct, anchoredAt>0, revoked=false ✅
+  4c. getCredential: valid=true, status=Active, expiresAt=1802794008 ✅
+  4d. isCredentialValid: true ✅
+
+RESULT: ALL E2E STEPS PASSED
