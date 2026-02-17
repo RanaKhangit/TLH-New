@@ -36,6 +36,7 @@ contract DIDRegistry is Initializable, UUPSUpgradeable, AccessControlUpgradeable
     error NotDIDController(bytes32 did, address caller);
     error DIDAlreadyDeactivated(bytes32 did);
     error InvalidAdmin(address admin);
+    error InvalidController(address controller);
 
     // -------------------------
     // Events (success-path only)
@@ -70,6 +71,8 @@ contract DIDRegistry is Initializable, UUPSUpgradeable, AccessControlUpgradeable
     /// @param did DID identifier (bytes32).
     /// @param controller Controller address for this DID.
     function registerDID(bytes32 did, address controller) external onlyRole(REGISTRAR_ROLE) {
+        if (controller == address(0)) revert InvalidController(controller);
+
         DIDRecord storage r = _records[did];
         if (r.registeredAt != 0) revert DIDAlreadyRegistered(did);
 
@@ -122,6 +125,8 @@ contract DIDRegistry is Initializable, UUPSUpgradeable, AccessControlUpgradeable
     /// @param did DID identifier (bytes32).
     /// @param newController New controller address.
     function updateController(bytes32 did, address newController) external {
+        if (newController == address(0)) revert InvalidController(newController);
+
         DIDRecord storage r = _records[did];
         if (r.registeredAt == 0) revert DIDNotFound(did);
         if (msg.sender != r.controller) revert NotDIDController(did, msg.sender);

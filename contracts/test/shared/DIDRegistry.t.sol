@@ -92,6 +92,12 @@ contract DIDRegistryTest is Test {
         vm.stopPrank();
     }
 
+    function testRegisterDIDZeroControllerReverts() public {
+        vm.prank(admin);
+        vm.expectRevert(abi.encodeWithSelector(DIDRegistry.InvalidController.selector, address(0)));
+        registry.registerDID(DID1, address(0));
+    }
+
     // ---- resolveDID ----
 
     function testResolveDIDNotFoundReverts() public {
@@ -185,6 +191,15 @@ contract DIDRegistryTest is Test {
         vm.prank(stranger);
         vm.expectRevert(abi.encodeWithSelector(DIDRegistry.NotDIDController.selector, DID1, stranger));
         registry.updateController(DID1, address(0xCAFE));
+    }
+
+    function testUpdateControllerZeroAddressReverts() public {
+        vm.prank(admin);
+        registry.registerDID(DID1, address(0xBEEF));
+
+        vm.prank(address(0xBEEF));
+        vm.expectRevert(abi.encodeWithSelector(DIDRegistry.InvalidController.selector, address(0)));
+        registry.updateController(DID1, address(0));
     }
 
     // ---- lastUpdatedAt tracks across multiple mutations ----

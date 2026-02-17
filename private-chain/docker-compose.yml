@@ -1,0 +1,102 @@
+version: "3.8"
+
+# TLH Private Trust Chain — 4-validator Polygon Edge IBFT 2.0 network
+# Chain ID: 100100 | Block time: 2s | Consensus: IBFT 2.0 (3f+1 BFT)
+#
+# Usage:
+#   1. Run init.sh first to generate validator secrets and genesis
+#   2. docker compose up -d
+#   3. JSON-RPC available at http://localhost:8545
+
+x-polygon-edge: &polygon-edge-base
+  image: 0xpolygon/polygon-edge:1.3.3
+  restart: unless-stopped
+  networks:
+    - trust-chain
+
+services:
+  # ── Validator 1 (exposes JSON-RPC) ────────────────────────────────
+  validator-1:
+    <<: *polygon-edge-base
+    container_name: tlh-validator-1
+    command:
+      - server
+      - --data-dir=/data
+      - --chain=/genesis/genesis.json
+      - --grpc-address=0.0.0.0:9632
+      - --libp2p=0.0.0.0:10001
+      - --jsonrpc=0.0.0.0:8545
+      - --seal
+      - --log-level=INFO
+    ports:
+      - "8545:8545"
+      - "9632:9632"
+      - "10001:10001"
+    volumes:
+      - ./data/validator-1:/data
+      - ./genesis.json:/genesis/genesis.json:ro
+
+  # ── Validator 2 ───────────────────────────────────────────────────
+  validator-2:
+    <<: *polygon-edge-base
+    container_name: tlh-validator-2
+    command:
+      - server
+      - --data-dir=/data
+      - --chain=/genesis/genesis.json
+      - --grpc-address=0.0.0.0:9632
+      - --libp2p=0.0.0.0:10002
+      - --jsonrpc=0.0.0.0:8546
+      - --seal
+      - --log-level=INFO
+    ports:
+      - "8546:8546"
+      - "10002:10002"
+    volumes:
+      - ./data/validator-2:/data
+      - ./genesis.json:/genesis/genesis.json:ro
+
+  # ── Validator 3 ───────────────────────────────────────────────────
+  validator-3:
+    <<: *polygon-edge-base
+    container_name: tlh-validator-3
+    command:
+      - server
+      - --data-dir=/data
+      - --chain=/genesis/genesis.json
+      - --grpc-address=0.0.0.0:9632
+      - --libp2p=0.0.0.0:10003
+      - --jsonrpc=0.0.0.0:8547
+      - --seal
+      - --log-level=INFO
+    ports:
+      - "8547:8547"
+      - "10003:10003"
+    volumes:
+      - ./data/validator-3:/data
+      - ./genesis.json:/genesis/genesis.json:ro
+
+  # ── Validator 4 ───────────────────────────────────────────────────
+  validator-4:
+    <<: *polygon-edge-base
+    container_name: tlh-validator-4
+    command:
+      - server
+      - --data-dir=/data
+      - --chain=/genesis/genesis.json
+      - --grpc-address=0.0.0.0:9632
+      - --libp2p=0.0.0.0:10004
+      - --jsonrpc=0.0.0.0:8548
+      - --seal
+      - --log-level=INFO
+    ports:
+      - "8548:8548"
+      - "10004:10004"
+    volumes:
+      - ./data/validator-4:/data
+      - ./genesis.json:/genesis/genesis.json:ro
+
+networks:
+  trust-chain:
+    driver: bridge
+    name: tlh-trust-chain
