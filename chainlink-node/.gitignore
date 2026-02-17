@@ -14,6 +14,8 @@ chainlink-data/
 *.json
 !package.json
 !docker-compose*.json
+!external-adapter/package-lock.json
+!external-adapter/tsconfig.json
 
 # Backup files
 *.bak
@@ -35,3 +37,6 @@ Thumbs.db
 # Temporary files
 tmp/
 temp/
+
+# External adapter build output
+external-adapter/dist/
