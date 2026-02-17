@@ -82,9 +82,13 @@ echo "[4/6] Deployment manifest..."
 if [ -f "$MANIFEST" ]; then
     pass "Manifest found: $MANIFEST"
 
-    # Extract addresses from manifest
-    CRED_PROXY=$(python3 -c "import json; m=json.load(open('$MANIFEST')); print(m['contracts']['CredentialRegistry']['proxy'])" 2>/dev/null || echo "")
-    TAV_PROXY=$(python3 -c "import json; m=json.load(open('$MANIFEST')); print(m['contracts']['TrustAttestationVerifier']['proxy'])" 2>/dev/null || echo "")
+    # Extract addresses from manifest (cross-platform: try node, then python3, then grep)
+    CRED_PROXY=$(node -p "JSON.parse(require('fs').readFileSync(process.argv[1],'utf8')).contracts.CredentialRegistry.proxy" "$MANIFEST" 2>/dev/null \
+        || python3 -c "import json,sys; m=json.load(open(sys.argv[1])); print(m['contracts']['CredentialRegistry']['proxy'])" "$MANIFEST" 2>/dev/null \
+        || grep -o '"proxy": "[^"]*"' "$MANIFEST" | head -1 | cut -d'"' -f4 || echo "")
+    TAV_PROXY=$(node -p "JSON.parse(require('fs').readFileSync(process.argv[1],'utf8')).contracts.TrustAttestationVerifier.proxy" "$MANIFEST" 2>/dev/null \
+        || python3 -c "import json,sys; m=json.load(open(sys.argv[1])); print(m['contracts']['TrustAttestationVerifier']['proxy'])" "$MANIFEST" 2>/dev/null \
+        || grep -o '"proxy": "[^"]*"' "$MANIFEST" | tail -1 | cut -d'"' -f4 || echo "")
 else
     fail "Manifest not found: $MANIFEST"
     CRED_PROXY=""

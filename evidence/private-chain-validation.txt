@@ -1,0 +1,31 @@
+╔══════════════════════════════════════════════════════════╗
+║  TLH Private Trust Chain — Validation                   ║
+╚══════════════════════════════════════════════════════════╝
+
+[1/6] Chain connectivity...
+  [PASS] Chain reachable at http://localhost:8545
+[2/6] Chain ID...
+  [PASS] Chain ID = 100100 (expected 100100)
+[3/6] Block production...
+  [PASS] Blocks advancing: 1111 -> 1113
+[4/6] Deployment manifest...
+  [PASS] Manifest found: /c/tlh/contracts/deployment-manifest.private-chain.json
+[5/6] Contract bytecode...
+  [PASS] CredentialRegistry proxy has bytecode at 0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9
+  [PASS] TrustAttestationVerifier proxy has bytecode at 0x0165878A594ca255338adfa4d48449f69242Eb8F
+[6/6] Role wiring...
+  [PASS] TrustAttestationVerifier has VERIFIER_ROLE on CredentialRegistry
+
+═══════════════════════════════════════════════════════════
+  Validation Results
+───────────────────────────────────────────────────────────
+  [PASS] Chain reachable at http://localhost:8545
+  [PASS] Chain ID = 100100 (expected 100100)
+  [PASS] Blocks advancing: 1111 -> 1113
+  [PASS] Manifest found: /c/tlh/contracts/deployment-manifest.private-chain.json
+  [PASS] CredentialRegistry proxy has bytecode at 0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9
+  [PASS] TrustAttestationVerifier proxy has bytecode at 0x0165878A594ca255338adfa4d48449f69242Eb8F
+  [PASS] TrustAttestationVerifier has VERIFIER_ROLE on CredentialRegistry
+───────────────────────────────────────────────────────────
+  Total: 7  |  Pass: 7  |  Fail: 0
+═══════════════════════════════════════════════════════════

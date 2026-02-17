@@ -9,7 +9,7 @@ version: "3.8"
 #   3. JSON-RPC available at http://localhost:8545
 
 x-polygon-edge: &polygon-edge-base
-  image: 0xpolygon/polygon-edge:1.3.3
+  image: 0xpolygon/polygon-edge:0.9.0
   restart: unless-stopped
   networks:
     - trust-chain

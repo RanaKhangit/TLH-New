@@ -12,7 +12,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 DATA_DIR="$ROOT_DIR/data"
-IMAGE="0xpolygon/polygon-edge:1.3.3"
+IMAGE="0xpolygon/polygon-edge:0.9.0"
 
 # ── Configuration ───────────────────────────────────────────────────
 CHAIN_ID="${CHAIN_ID:-100100}"
@@ -53,7 +53,7 @@ for i in "${!VALIDATORS[@]}"; do
     output=$(docker run --rm \
         -v "$dir:/data" \
         "$IMAGE" \
-        secrets init --data-dir /data --json 2>&1)
+        secrets init --data-dir /data --json --insecure 2>&1)
 
     # Extract node ID and address from JSON output
     node_id=$(echo "$output" | grep -o '"node_id":"[^"]*"' | head -1 | cut -d'"' -f4)
@@ -68,7 +68,7 @@ for i in "${!VALIDATORS[@]}"; do
     VALIDATOR_ADDRESSES+=("$address")
     # libp2p port = 10001 + index
     port=$((10001 + i))
-    BOOTNODE_MULTIADDRS+=("/ip4/$(echo "$name" | tr '-' '0')/tcp/$port/p2p/$node_id")
+    BOOTNODE_MULTIADDRS+=("/dns4/$name/tcp/$port/p2p/$node_id")
 
     echo "    Address: $address"
     echo "    Node ID: ${node_id:0:16}..."
