@@ -45,10 +45,6 @@ export function isValidBytes32(value: string): boolean {
   return /^0x[0-9a-fA-F]{64}$/.test(value);
 }
 
-export function isValidAddress(value: string): boolean {
-  return /^0x[0-9a-fA-F]{40}$/.test(value);
-}
-
 export const CREDENTIAL_STATUS = {
   0: "Active",
   1: "Expired",

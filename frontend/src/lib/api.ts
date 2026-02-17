@@ -59,7 +59,10 @@ export async function fetchGMCLookup(
   givenName: string
 ): Promise<GMCRecord[]> {
   const params = new URLSearchParams({ surname, givenName });
-  return fetchJSON<GMCRecord[]>(`${PROVER_API}/gmc/lookup?${params}`);
+  const data = await fetchJSON<GMCRecord | GMCRecord[]>(
+    `${PROVER_API}/gmc/lookup?${params}`
+  );
+  return Array.isArray(data) ? data : [data];
 }
 
 export async function fetchProverHealth(): Promise<boolean> {

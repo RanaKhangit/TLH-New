@@ -10,44 +10,11 @@ import {
   toBytes32,
   credentialStatusLabel,
 } from "@/lib/utils";
+import { Card } from "@/components/ui/card";
+import { Badge, type BadgeVariant } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 
-function Card({
-  children,
-  className = "",
-}: {
-  children: React.ReactNode;
-  className?: string;
-}) {
-  return (
-    <div className={`rounded-xl border border-border bg-card p-5 ${className}`}>
-      {children}
-    </div>
-  );
-}
-
-function Badge({
-  variant,
-  children,
-}: {
-  variant: "success" | "danger" | "muted" | "warning";
-  children: React.ReactNode;
-}) {
-  const colors = {
-    success: "bg-success/10 text-success border-success/20",
-    danger: "bg-danger/10 text-danger border-danger/20",
-    warning: "bg-warning/10 text-warning border-warning/20",
-    muted: "bg-muted text-muted-foreground border-border",
-  };
-  return (
-    <span
-      className={`inline-flex items-center rounded-md border px-2.5 py-0.5 text-xs font-medium ${colors[variant]}`}
-    >
-      {children}
-    </span>
-  );
-}
-
-function statusBadgeVariant(status: number): "success" | "danger" | "warning" {
+function statusBadgeVariant(status: number): BadgeVariant {
   if (status === 0) return "success";
   if (status === 2) return "danger";
   return "warning";
@@ -129,6 +96,7 @@ export default function CredentialsPage() {
                 onChange={(e) => setDidInput(e.target.value)}
                 placeholder="did:tlh:clinician-789"
                 className="w-full rounded-lg border border-border bg-muted px-3 py-2 text-sm text-foreground font-mono placeholder:text-muted-foreground"
+                onKeyDown={(e) => e.key === "Enter" && handleQuery()}
               />
             </div>
             <div>
@@ -141,6 +109,7 @@ export default function CredentialsPage() {
                 onChange={(e) => setPredInput(e.target.value)}
                 placeholder="GMC_REGISTERED"
                 className="w-full rounded-lg border border-border bg-muted px-3 py-2 text-sm text-foreground font-mono placeholder:text-muted-foreground"
+                onKeyDown={(e) => e.key === "Enter" && handleQuery()}
               />
             </div>
           </div>
@@ -153,6 +122,18 @@ export default function CredentialsPage() {
           </button>
         </div>
       </Card>
+
+      {credLoading && queriedDID && (
+        <Card>
+          <Skeleton className="h-4 w-32 mb-4" />
+          <div className="space-y-3">
+            <Skeleton className="h-3 w-full" />
+            <Skeleton className="h-3 w-3/4" />
+            <Skeleton className="h-3 w-full" />
+            <Skeleton className="h-3 w-1/2" />
+          </div>
+        </Card>
+      )}
 
       {notFound && queriedDID && (
         <Card>
@@ -265,6 +246,7 @@ export default function CredentialsPage() {
                 onChange={(e) => setAnchorVcType(e.target.value)}
                 placeholder="GMC_LICENSE"
                 className="w-full rounded-lg border border-border bg-muted px-3 py-2 text-sm text-foreground font-mono placeholder:text-muted-foreground"
+                onKeyDown={(e) => e.key === "Enter" && handleAnchorQuery()}
               />
             </div>
           </div>
@@ -277,6 +259,17 @@ export default function CredentialsPage() {
           </button>
         </div>
       </Card>
+
+      {anchorLoading && anchorDID && (
+        <Card>
+          <Skeleton className="h-4 w-32 mb-4" />
+          <div className="space-y-3">
+            <Skeleton className="h-3 w-full" />
+            <Skeleton className="h-3 w-3/4" />
+            <Skeleton className="h-3 w-1/2" />
+          </div>
+        </Card>
+      )}
 
       {anchorError && anchorDID && (
         <Card>

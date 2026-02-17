@@ -12,41 +12,9 @@ import {
   type PipelineResult,
 } from "@/lib/api";
 import { etherscanTxUrl, formatBytes32 } from "@/lib/utils";
-
-function Card({
-  children,
-  className = "",
-}: {
-  children: React.ReactNode;
-  className?: string;
-}) {
-  return (
-    <div className={`rounded-xl border border-border bg-card p-5 ${className}`}>
-      {children}
-    </div>
-  );
-}
-
-function Badge({
-  variant,
-  children,
-}: {
-  variant: "success" | "danger" | "muted";
-  children: React.ReactNode;
-}) {
-  const colors = {
-    success: "bg-success/10 text-success border-success/20",
-    danger: "bg-danger/10 text-danger border-danger/20",
-    muted: "bg-muted text-muted-foreground border-border",
-  };
-  return (
-    <span
-      className={`inline-flex items-center rounded-md border px-2.5 py-0.5 text-xs font-medium ${colors[variant]}`}
-    >
-      {children}
-    </span>
-  );
-}
+import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 
 const DEMO_NAMES = [
   { surname: "Adfcds", givenName: "Azhar" },
@@ -58,6 +26,7 @@ const DEMO_NAMES = [
 export default function VerifyPage() {
   const [attestation, setAttestation] = useState<DecoAttestation | null>(null);
   const [loadingAtt, setLoadingAtt] = useState(false);
+  const [attError, setAttError] = useState<string | null>(null);
   const [verifyResult, setVerifyResult] = useState<DecoVerifyResult | null>(null);
   const [verifying, setVerifying] = useState(false);
   const [verifyError, setVerifyError] = useState<string | null>(null);
@@ -66,15 +35,18 @@ export default function VerifyPage() {
   const [pipelineError, setPipelineError] = useState<string | null>(null);
   const [gmcResults, setGmcResults] = useState<GMCRecord[] | null>(null);
   const [gmcLoading, setGmcLoading] = useState(false);
+  const [gmcError, setGmcError] = useState<string | null>(null);
   const [selectedName, setSelectedName] = useState(0);
 
   async function loadAttestation() {
     setLoadingAtt(true);
+    setAttError(null);
     try {
       const att = await fetchDecoAttestation();
       setAttestation(att);
-    } catch {
+    } catch (e) {
       setAttestation(null);
+      setAttError(e instanceof Error ? e.message : "Failed to load attestation. Is the Prover API running?");
     }
     setLoadingAtt(false);
   }
@@ -110,12 +82,14 @@ export default function VerifyPage() {
   async function lookupGMC() {
     setGmcLoading(true);
     setGmcResults(null);
+    setGmcError(null);
     try {
       const { surname, givenName } = DEMO_NAMES[selectedName];
       const results = await fetchGMCLookup(surname, givenName);
       setGmcResults(results);
-    } catch {
-      setGmcResults([]);
+    } catch (e) {
+      setGmcResults(null);
+      setGmcError(e instanceof Error ? e.message : "GMC lookup failed. Is the Prover API running?");
     }
     setGmcLoading(false);
   }
@@ -145,7 +119,20 @@ export default function VerifyPage() {
             {loadingAtt ? "Loading..." : "Load Attestation"}
           </button>
         </div>
-        {attestation && (
+        {attError && (
+          <div className="rounded-lg bg-danger/10 border border-danger/20 p-3 text-sm text-danger">
+            {attError}
+          </div>
+        )}
+        {loadingAtt && (
+          <div className="space-y-2">
+            <Skeleton className="h-3 w-full" />
+            <Skeleton className="h-3 w-3/4" />
+            <Skeleton className="h-10 w-full" />
+            <Skeleton className="h-10 w-full" />
+          </div>
+        )}
+        {attestation && !loadingAtt && (
           <dl className="space-y-2 text-sm">
             <div className="flex justify-between">
               <dt className="text-muted-foreground">Signature Scheme</dt>
@@ -196,7 +183,15 @@ export default function VerifyPage() {
           </div>
         )}
 
-        {verifyResult && (
+        {verifying && (
+          <div className="space-y-2">
+            <Skeleton className="h-3 w-24" />
+            <Skeleton className="h-3 w-full" />
+            <Skeleton className="h-3 w-3/4" />
+          </div>
+        )}
+
+        {verifyResult && !verifying && (
           <div className="space-y-3">
             <div className="flex items-center gap-3">
               <span className="text-sm text-muted-foreground">Result:</span>
@@ -245,7 +240,15 @@ export default function VerifyPage() {
           </div>
         )}
 
-        {pipeline && (
+        {submitting && (
+          <div className="space-y-2">
+            <Skeleton className="h-3 w-32" />
+            <Skeleton className="h-3 w-full" />
+            <Skeleton className="h-3 w-3/4" />
+          </div>
+        )}
+
+        {pipeline && !submitting && (
           <dl className="space-y-2 text-sm">
             <div className="flex justify-between">
               <dt className="text-muted-foreground">Verification</dt>
@@ -315,6 +318,14 @@ export default function VerifyPage() {
           </button>
         </div>
 
+        {gmcLoading && (
+          <div className="space-y-2">
+            <Skeleton className="h-3 w-full" />
+            <Skeleton className="h-3 w-3/4" />
+            <Skeleton className="h-3 w-full" />
+          </div>
+        )}
+
         {gmcResults && gmcResults.length > 0 && (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -350,6 +361,11 @@ export default function VerifyPage() {
           </div>
         )}
 
+        {gmcError && (
+          <div className="rounded-lg bg-danger/10 border border-danger/20 p-3 text-sm text-danger">
+            {gmcError}
+          </div>
+        )}
         {gmcResults && gmcResults.length === 0 && (
           <div className="text-sm text-muted-foreground">No records found.</div>
         )}

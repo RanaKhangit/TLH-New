@@ -11,46 +11,15 @@ import {
   formatBytes32,
   isValidBytes32,
 } from "@/lib/utils";
-
-function Card({
-  children,
-  className = "",
-}: {
-  children: React.ReactNode;
-  className?: string;
-}) {
-  return (
-    <div className={`rounded-xl border border-border bg-card p-5 ${className}`}>
-      {children}
-    </div>
-  );
-}
-
-function Badge({
-  variant,
-  children,
-}: {
-  variant: "success" | "danger" | "muted";
-  children: React.ReactNode;
-}) {
-  const colors = {
-    success: "bg-success/10 text-success border-success/20",
-    danger: "bg-danger/10 text-danger border-danger/20",
-    muted: "bg-muted text-muted-foreground border-border",
-  };
-  return (
-    <span
-      className={`inline-flex items-center rounded-md border px-2.5 py-0.5 text-xs font-medium ${colors[variant]}`}
-    >
-      {children}
-    </span>
-  );
-}
+import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export default function AttestationsPage() {
   const [input, setInput] = useState("");
   const [verifier, setVerifier] = useState<"shared" | "trust">("shared");
   const [queriedId, setQueriedId] = useState<`0x${string}` | undefined>();
+  const [inputError, setInputError] = useState<string | null>(null);
 
   const sharedResult = useVerifyAttestation(
     verifier === "shared" ? queriedId : undefined
@@ -63,10 +32,19 @@ export default function AttestationsPage() {
   const { data, isLoading, error } = result;
 
   function handleLookup() {
+    setInputError(null);
     if (!input.trim()) return;
     if (isValidBytes32(input.trim())) {
       setQueriedId(input.trim() as `0x${string}`);
+    } else {
+      setInputError("Invalid format — must be 0x followed by 64 hex characters.");
     }
+  }
+
+  function switchVerifier(v: "shared" | "trust") {
+    setVerifier(v);
+    setQueriedId(undefined);
+    setInputError(null);
   }
 
   const notFound = data && !data[0];
@@ -86,7 +64,7 @@ export default function AttestationsPage() {
         <div className="space-y-4">
           <div className="flex gap-3">
             <button
-              onClick={() => setVerifier("shared")}
+              onClick={() => switchVerifier("shared")}
               className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
                 verifier === "shared"
                   ? "bg-accent/10 text-accent"
@@ -96,7 +74,7 @@ export default function AttestationsPage() {
               Shared Anchor Verifier
             </button>
             <button
-              onClick={() => setVerifier("trust")}
+              onClick={() => switchVerifier("trust")}
               className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
                 verifier === "trust"
                   ? "bg-accent/10 text-accent"
@@ -111,9 +89,9 @@ export default function AttestationsPage() {
             <input
               type="text"
               value={input}
-              onChange={(e) => setInput(e.target.value)}
+              onChange={(e) => { setInput(e.target.value); setInputError(null); }}
               placeholder="Attestation ID (0x... bytes32)"
-              className="flex-1 rounded-lg border border-border bg-muted px-3 py-2 text-sm text-foreground font-mono placeholder:text-muted-foreground"
+              className={`flex-1 rounded-lg border bg-muted px-3 py-2 text-sm text-foreground font-mono placeholder:text-muted-foreground ${inputError ? "border-danger" : "border-border"}`}
               onKeyDown={(e) => e.key === "Enter" && handleLookup()}
             />
             <button
@@ -124,8 +102,23 @@ export default function AttestationsPage() {
               {isLoading ? "Looking up..." : "Look Up"}
             </button>
           </div>
+          {inputError && (
+            <p className="text-xs text-danger">{inputError}</p>
+          )}
         </div>
       </Card>
+
+      {isLoading && queriedId && (
+        <Card>
+          <Skeleton className="h-4 w-32 mb-4" />
+          <div className="space-y-3">
+            <Skeleton className="h-3 w-full" />
+            <Skeleton className="h-3 w-3/4" />
+            <Skeleton className="h-3 w-full" />
+            <Skeleton className="h-3 w-1/2" />
+          </div>
+        </Card>
+      )}
 
       {notFound && queriedId && (
         <Card>

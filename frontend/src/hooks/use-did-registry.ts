@@ -13,11 +13,3 @@ export function useResolveDID(did: `0x${string}` | undefined) {
     query: { enabled: !!did },
   });
 }
-
-export function useLastUpdatedAt() {
-  return useReadContract({
-    address: CONTRACTS.DIDRegistry.proxy,
-    abi: DIDRegistryABI,
-    functionName: "lastUpdatedAt",
-  });
-}

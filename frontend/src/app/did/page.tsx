@@ -10,41 +10,9 @@ import {
   isValidBytes32,
   etherscanAddressUrl,
 } from "@/lib/utils";
-
-function Card({
-  children,
-  className = "",
-}: {
-  children: React.ReactNode;
-  className?: string;
-}) {
-  return (
-    <div className={`rounded-xl border border-border bg-card p-5 ${className}`}>
-      {children}
-    </div>
-  );
-}
-
-function Badge({
-  variant,
-  children,
-}: {
-  variant: "success" | "danger" | "muted";
-  children: React.ReactNode;
-}) {
-  const colors = {
-    success: "bg-success/10 text-success border-success/20",
-    danger: "bg-danger/10 text-danger border-danger/20",
-    muted: "bg-muted text-muted-foreground border-border",
-  };
-  return (
-    <span
-      className={`inline-flex items-center rounded-md border px-2.5 py-0.5 text-xs font-medium ${colors[variant]}`}
-    >
-      {children}
-    </span>
-  );
-}
+import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 
 const DEMO_DIDS = [
   { label: "did:tlh:clinician-789", value: "did:tlh:clinician-789" },
@@ -55,16 +23,20 @@ export default function DIDExplorerPage() {
   const [input, setInput] = useState("");
   const [hashMode, setHashMode] = useState(true);
   const [queriedDID, setQueriedDID] = useState<`0x${string}` | undefined>();
+  const [inputError, setInputError] = useState<string | null>(null);
 
   const { data, isLoading, error } = useResolveDID(queriedDID);
 
   function handleResolve() {
+    setInputError(null);
     if (!input.trim()) return;
     if (hashMode) {
       setQueriedDID(toBytes32(input.trim()));
     } else {
       if (isValidBytes32(input.trim())) {
         setQueriedDID(input.trim() as `0x${string}`);
+      } else {
+        setInputError("Invalid format — must be 0x followed by 64 hex characters.");
       }
     }
   }
@@ -99,13 +71,13 @@ export default function DIDExplorerPage() {
               <input
                 type="text"
                 value={input}
-                onChange={(e) => setInput(e.target.value)}
+                onChange={(e) => { setInput(e.target.value); setInputError(null); }}
                 placeholder={
                   hashMode
                     ? 'e.g. did:tlh:clinician-789'
                     : "0x... (bytes32 hex)"
                 }
-                className="w-full rounded-lg border border-border bg-muted px-3 py-2 text-sm text-foreground font-mono placeholder:text-muted-foreground"
+                className={`w-full rounded-lg border bg-muted px-3 py-2 text-sm text-foreground font-mono placeholder:text-muted-foreground ${inputError ? "border-danger" : "border-border"}`}
                 onKeyDown={(e) => e.key === "Enter" && handleResolve()}
               />
             </div>
@@ -117,6 +89,9 @@ export default function DIDExplorerPage() {
               {isLoading ? "Resolving..." : "Resolve DID"}
             </button>
           </div>
+          {inputError && (
+            <p className="text-xs text-danger">{inputError}</p>
+          )}
 
           <div className="flex gap-2">
             {DEMO_DIDS.map((d) => (
@@ -140,6 +115,18 @@ export default function DIDExplorerPage() {
           )}
         </div>
       </Card>
+
+      {isLoading && queriedDID && (
+        <Card>
+          <Skeleton className="h-4 w-24 mb-4" />
+          <div className="space-y-3">
+            <Skeleton className="h-3 w-full" />
+            <Skeleton className="h-3 w-3/4" />
+            <Skeleton className="h-3 w-full" />
+            <Skeleton className="h-3 w-1/2" />
+          </div>
+        </Card>
+      )}
 
       {notFound && queriedDID && (
         <Card>

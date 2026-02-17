@@ -9,6 +9,8 @@ import {
 } from "@/lib/utils";
 import { useEffect, useState } from "react";
 import { fetchProverHealth, fetchEAHealth } from "@/lib/api";
+import { Card } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 
 function StatusDot({ ok }: { ok: boolean | undefined }) {
   return (
@@ -17,22 +19,6 @@ function StatusDot({ ok }: { ok: boolean | undefined }) {
         ok === undefined ? "bg-muted-foreground animate-pulse" : ok ? "bg-success" : "bg-danger"
       }`}
     />
-  );
-}
-
-function Card({
-  children,
-  className = "",
-}: {
-  children: React.ReactNode;
-  className?: string;
-}) {
-  return (
-    <div
-      className={`rounded-xl border border-border bg-card p-5 ${className}`}
-    >
-      {children}
-    </div>
   );
 }
 
@@ -133,7 +119,8 @@ export default function DashboardPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {[1, 2, 3, 4, 5].map((i) => (
               <Card key={i}>
-                <div className="h-12 bg-muted rounded animate-pulse" />
+                <Skeleton className="h-4 w-32 mb-3" />
+                <Skeleton className="h-3 w-48" />
               </Card>
             ))}
           </div>
