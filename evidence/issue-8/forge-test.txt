@@ -1,0 +1,36 @@
+No files changed, compilation skipped
+
+Ran 1 test for test/Placeholder.t.sol:PlaceholderTest
+[PASS] test_ping_returns_true() (gas: 56161)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 387.00µs (82.30µs CPU time)
+
+Ran 13 tests for test/shared/VCHashAnchors.t.sol:VCHashAnchorsTest
+[PASS] testAnchorHappyPath() (gas: 115796)
+[PASS] testAppendOnlyHistory() (gas: 143895)
+[PASS] testDoubleRevokeReverts() (gas: 142954)
+[PASS] testGetAnchorNotFoundReverts() (gas: 20723)
+[PASS] testGetHistoryEmptyForUnknown() (gas: 13425)
+[PASS] testImplCannotBeReinitialized() (gas: 961381)
+[PASS] testNonAdminCannotRevoke() (gas: 117536)
+[PASS] testNonWriterCannotAnchor() (gas: 18963)
+[PASS] testRevokeAnchorSetsRevokedFlag() (gas: 143911)
+[PASS] testRevokeBlocksReAnchor() (gas: 142997)
+[PASS] testRevokeNonexistentReverts() (gas: 21180)
+[PASS] testUpgradeOnlyUpgrader() (gas: 1002360)
+[PASS] testZeroAdminInitReverts() (gas: 1038776)
+Suite result: ok. 13 passed; 0 failed; 0 skipped; finished in 1.59ms (9.81ms CPU time)
+
+Ran 10 tests for test/base/BaseAttestationVerifier.t.sol:BaseAttestationVerifierTest
+[PASS] testAddRemoveSignerAccessControl() (gas: 30769)
+[PASS] testDuplicateAttestationReverts() (gas: 140171)
+[PASS] testEmptyPredicateReverts() (gas: 11876)
+[PASS] testExpiredNegativeAttestationAllowed() (gas: 116629)
+[PASS] testExpiredPositiveAttestationReverts() (gas: 19211)
+[PASS] testFalseResultSubmission() (gas: 116611)
+[PASS] testNonExpiringPositiveAttestationAllowed() (gas: 136400)
+[PASS] testResultMismatchReverts() (gas: 18399)
+[PASS] testUnauthorizedSignerReverts() (gas: 24278)
+[PASS] testValidSignatureStoresAndEmits() (gas: 138985)
+Suite result: ok. 10 passed; 0 failed; 0 skipped; finished in 1.93ms (9.51ms CPU time)
+
+Ran 3 test suites in 7.56ms (3.91ms CPU time): 24 tests passed, 0 failed, 0 skipped (24 total tests)
