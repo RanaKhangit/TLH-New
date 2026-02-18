@@ -2,14 +2,12 @@
 
 import { useState } from "react";
 import {
-  fetchDecoVerify,
-  fetchGMCLookup,
   triggerFullPipeline,
-  type DecoVerifyResult,
-  type GMCRecord,
   type PipelineResult,
 } from "@/lib/api";
-import { etherscanTxUrl, formatBytes32 } from "@/lib/utils";
+import { useVerifyAttestation, useTrustVerifyAttestation } from "@/hooks/use-attestation-verifier";
+import { useIsCredentialValid } from "@/hooks/use-credential-registry";
+import { etherscanTxUrl, formatBytes32, toBytes32 } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -22,81 +20,26 @@ const DEMO_NAMES = [
 ];
 
 export default function VerifyPage() {
-  // Step 1: GMC Lookup
-  const [gmcResults, setGmcResults] = useState<GMCRecord[] | null>(null);
-  const [gmcLoading, setGmcLoading] = useState(false);
-  const [gmcError, setGmcError] = useState<string | null>(null);
-
-  // Step 2: DECO Verify (generates attestation + verifies it)
-  const [decoResult, setDecoResult] = useState<DecoVerifyResult | null>(null);
-  const [decoLoading, setDecoLoading] = useState(false);
-  const [decoError, setDecoError] = useState<string | null>(null);
-
-  // Step 3: Submit On-Chain
   const [pipeline, setPipeline] = useState<PipelineResult | null>(null);
-  const [submitting, setSubmitting] = useState(false);
-  const [pipelineError, setPipelineError] = useState<string | null>(null);
-
+  const [running, setRunning] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [selectedName, setSelectedName] = useState(0);
 
-  async function lookupGMC() {
-    setGmcLoading(true);
-    setGmcResults(null);
-    setGmcError(null);
-    // Reset downstream steps
-    setDecoResult(null);
-    setDecoError(null);
-    setPipeline(null);
-    setPipelineError(null);
-    try {
-      const { surname, givenName } = DEMO_NAMES[selectedName];
-      const results = await fetchGMCLookup(surname, givenName);
-      setGmcResults(results);
-    } catch (e) {
-      setGmcError(
-        e instanceof Error ? e.message : "GMC lookup failed. Is the Prover API running?"
-      );
-    }
-    setGmcLoading(false);
-  }
+  const { surname, givenName } = DEMO_NAMES[selectedName];
+  const clinicianDID = `did:tlh:${givenName.toLowerCase()}-${surname.toLowerCase()}`;
 
-  async function verifyDeco() {
-    setDecoLoading(true);
-    setDecoResult(null);
-    setDecoError(null);
-    // Reset downstream
-    setPipeline(null);
-    setPipelineError(null);
-    try {
-      const { surname, givenName } = DEMO_NAMES[selectedName];
-      const result = await fetchDecoVerify(surname, givenName);
-      setDecoResult(result);
-    } catch (e) {
-      setDecoError(
-        e instanceof Error ? e.message : "DECO verification failed"
-      );
-    }
-    setDecoLoading(false);
-  }
-
-  async function submitOnChain() {
-    setSubmitting(true);
-    setPipelineError(null);
+  async function runPipeline() {
+    setRunning(true);
+    setError(null);
     setPipeline(null);
     try {
-      const { surname, givenName } = DEMO_NAMES[selectedName];
-      const clinicianDID = `did:tlh:${givenName.toLowerCase()}-${surname.toLowerCase()}`;
       const result = await triggerFullPipeline(clinicianDID, surname, givenName);
       setPipeline(result);
     } catch (e) {
-      setPipelineError(
-        e instanceof Error ? e.message : "Pipeline submission failed"
-      );
+      setError(e instanceof Error ? e.message : "Pipeline failed");
     }
-    setSubmitting(false);
+    setRunning(false);
   }
-
-  const { surname, givenName } = DEMO_NAMES[selectedName];
 
   return (
     <div className="space-y-8">
@@ -105,12 +48,11 @@ export default function VerifyPage() {
           Verify Credential
         </h1>
         <p className="text-sm text-muted-foreground mt-1">
-          End-to-end pipeline: GMC lookup &rarr; DECO attestation &rarr;
-          on-chain submission
+          Single-click pipeline: DECO verify + sign + submit to both chains
         </p>
       </div>
 
-      {/* Doctor Selector */}
+      {/* Doctor selector + trigger button */}
       <Card>
         <h2 className="text-sm font-semibold text-foreground mb-3">
           Select Doctor
@@ -119,15 +61,10 @@ export default function VerifyPage() {
           value={selectedName}
           onChange={(e) => {
             setSelectedName(Number(e.target.value));
-            // Reset all steps when doctor changes
-            setGmcResults(null);
-            setGmcError(null);
-            setDecoResult(null);
-            setDecoError(null);
             setPipeline(null);
-            setPipelineError(null);
+            setError(null);
           }}
-          className="w-full rounded-lg border border-border bg-muted px-3 py-2 text-sm text-foreground"
+          className="w-full rounded-lg border border-border bg-muted px-3 py-2 text-sm text-foreground mb-4"
         >
           {DEMO_NAMES.map((n, i) => (
             <option key={i} value={i}>
@@ -135,306 +72,264 @@ export default function VerifyPage() {
             </option>
           ))}
         </select>
-      </Card>
-
-      {/* Step 1: GMC Lookup */}
-      <Card>
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-sm font-semibold text-foreground">
-            <span className="text-accent mr-2">Step 1</span>
-            GMC Registry Lookup
-          </h2>
-          <button
-            onClick={lookupGMC}
-            disabled={gmcLoading}
-            className="rounded-lg bg-muted px-4 py-2 text-xs font-medium text-foreground hover:bg-muted/80 transition-colors disabled:opacity-50"
-          >
-            {gmcLoading ? "Looking up..." : "Lookup GMC Registration"}
-          </button>
-        </div>
-
-        {gmcLoading && (
-          <div className="space-y-2">
-            <Skeleton className="h-3 w-full" />
-            <Skeleton className="h-3 w-3/4" />
-            <Skeleton className="h-3 w-full" />
-          </div>
-        )}
-
-        {gmcError && (
-          <div className="rounded-lg bg-danger/10 border border-danger/20 p-3 text-sm text-danger">
-            {gmcError}
-          </div>
-        )}
-
-        {gmcResults && gmcResults.length > 0 && !gmcLoading && (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border text-left text-xs text-muted-foreground">
-                  <th className="pb-2 pr-4">GMC Ref</th>
-                  <th className="pb-2 pr-4">Name</th>
-                  <th className="pb-2 pr-4">Qualification</th>
-                  <th className="pb-2 pr-4">Registration Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {gmcResults.map((r, i) => (
-                  <tr key={i} className="border-b border-border/50">
-                    <td className="py-2 pr-4 font-mono">{r.gmcRefNo}</td>
-                    <td className="py-2 pr-4">
-                      {r.givenName} {r.surname}
-                    </td>
-                    <td className="py-2 pr-4 text-muted-foreground">
-                      {r.qualification}
-                    </td>
-                    <td className="py-2 pr-4">
-                      <Badge
-                        variant={
-                          r.registrationStatus?.includes("Licence")
-                            ? "success"
-                            : "danger"
-                        }
-                      >
-                        {r.registrationStatus}
-                      </Badge>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-
-        {gmcResults && gmcResults.length === 0 && (
-          <div className="text-sm text-muted-foreground">No records found.</div>
-        )}
-      </Card>
-
-      {/* Step 2: DECO Attestation Verification */}
-      <Card>
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-sm font-semibold text-foreground">
-            <span className="text-accent mr-2">Step 2</span>
-            DECO Attestation Verification
-          </h2>
-          <button
-            onClick={verifyDeco}
-            disabled={decoLoading}
-            className="rounded-lg bg-accent px-4 py-2 text-xs font-bold text-accent-foreground hover:bg-accent/80 transition-colors disabled:opacity-50"
-          >
-            {decoLoading ? "Generating & Verifying..." : "Generate & Verify Attestation"}
-          </button>
-        </div>
 
         <p className="text-xs text-muted-foreground mb-4">
-          Generates a DECO attestation for {givenName} {surname}&apos;s GMC
-          data, signs it with the prover key, then cryptographically verifies
-          the signature and registration predicate.
+          The External Adapter will: look up {givenName} {surname} in the GMC
+          register, generate and verify a DECO attestation, build ADR-002
+          predicateData, sign chain-bound digests, and submit to both Sepolia
+          (shared anchor) and Private Chain (trust) in a single atomic operation.
         </p>
 
-        {decoLoading && (
-          <div className="space-y-2">
-            <Skeleton className="h-3 w-24" />
-            <Skeleton className="h-3 w-full" />
-            <Skeleton className="h-3 w-3/4" />
-            <Skeleton className="h-10 w-full" />
-          </div>
-        )}
-
-        {decoError && (
-          <div className="rounded-lg bg-danger/10 border border-danger/20 p-3 text-sm text-danger">
-            {decoError}
-          </div>
-        )}
-
-        {decoResult && !decoLoading && (
-          <div className="space-y-4">
-            {/* Attestation data */}
-            {decoResult.attestation && (
-              <div className="space-y-2 text-sm">
-                <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                  Attestation
-                </h3>
-                <dl className="space-y-2">
-                  <div className="flex justify-between">
-                    <dt className="text-muted-foreground">Signature Scheme</dt>
-                    <dd className="font-mono text-foreground">
-                      {decoResult.attestation.signature_scheme}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt className="text-muted-foreground mb-1">Signature</dt>
-                    <dd className="font-mono text-xs text-foreground bg-muted p-2 rounded break-all">
-                      {formatBytes32(decoResult.attestation.signature_hex)}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt className="text-muted-foreground mb-1">Public Key</dt>
-                    <dd className="font-mono text-xs text-foreground bg-muted p-2 rounded break-all">
-                      {formatBytes32(decoResult.attestation.public_key_hex)}
-                    </dd>
-                  </div>
-                </dl>
-              </div>
-            )}
-
-            {/* Verification result */}
-            <div className="border-t border-border pt-4 space-y-2 text-sm">
-              <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                Verification Result
-              </h3>
-              <div className="flex items-center gap-3">
-                <span className="text-muted-foreground">Result:</span>
-                <Badge
-                  variant={
-                    decoResult.result === "PASS" ? "success" : "danger"
-                  }
-                >
-                  {decoResult.result}
-                </Badge>
-              </div>
-              {decoResult.reason && (
-                <div className="flex justify-between">
-                  <dt className="text-muted-foreground">Reason</dt>
-                  <dd className="text-foreground text-right max-w-[60%]">
-                    {decoResult.reason}
-                  </dd>
-                </div>
-              )}
-              {decoResult.gmcRefNo && (
-                <div className="flex justify-between">
-                  <dt className="text-muted-foreground">GMC Ref (from proof)</dt>
-                  <dd className="font-mono text-foreground">
-                    {decoResult.gmcRefNo}
-                  </dd>
-                </div>
-              )}
-              {decoResult.registrationStatus && (
-                <div className="flex justify-between">
-                  <dt className="text-muted-foreground">
-                    Registration (from proof)
-                  </dt>
-                  <dd className="text-foreground">
-                    <Badge
-                      variant={
-                        decoResult.registrationStatus.includes("Licence")
-                          ? "success"
-                          : "danger"
-                      }
-                    >
-                      {decoResult.registrationStatus}
-                    </Badge>
-                  </dd>
-                </div>
-              )}
-              {decoResult.proofId && (
-                <div className="flex justify-between">
-                  <dt className="text-muted-foreground">Proof ID</dt>
-                  <dd className="font-mono text-foreground">
-                    {decoResult.proofId}
-                  </dd>
-                </div>
-              )}
-              {decoResult.completedAt && (
-                <div className="flex justify-between">
-                  <dt className="text-muted-foreground">Verified At</dt>
-                  <dd className="text-foreground">{decoResult.completedAt}</dd>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
+        <button
+          onClick={runPipeline}
+          disabled={running}
+          className="w-full rounded-lg bg-accent px-4 py-3 text-sm font-bold text-accent-foreground hover:bg-accent/80 transition-colors disabled:opacity-50"
+        >
+          {running ? "Running Pipeline..." : "Verify & Submit On-Chain"}
+        </button>
       </Card>
 
-      {/* Step 3: Submit On-Chain */}
-      <Card>
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-sm font-semibold text-foreground">
-            <span className="text-accent mr-2">Step 3</span>
-            Submit On-Chain
-          </h2>
-          <button
-            onClick={submitOnChain}
-            disabled={submitting}
-            className="rounded-lg bg-muted px-4 py-2 text-xs font-medium text-foreground hover:bg-muted/80 transition-colors disabled:opacity-50"
-          >
-            {submitting ? "Submitting..." : "Submit to Sepolia"}
-          </button>
-        </div>
-
-        <p className="text-xs text-muted-foreground mb-4">
-          Runs the full pipeline for {givenName} {surname}: EA verifies DECO
-          attestation, builds ADR-002 predicateData, signs chain-bound digest,
-          and calls submitAttestation() on the AttestationVerifier contract.
-        </p>
-
-        {submitting && (
-          <div className="space-y-2">
-            <Skeleton className="h-3 w-32" />
+      {/* Loading state */}
+      {running && (
+        <Card>
+          <div className="space-y-3">
+            <Skeleton className="h-3 w-48" />
             <Skeleton className="h-3 w-full" />
             <Skeleton className="h-3 w-3/4" />
+            <Skeleton className="h-3 w-full" />
+            <Skeleton className="h-3 w-1/2" />
           </div>
-        )}
+        </Card>
+      )}
 
-        {pipelineError && (
+      {/* Error */}
+      {error && (
+        <Card>
           <div className="rounded-lg bg-danger/10 border border-danger/20 p-3 text-sm text-danger">
-            {pipelineError}
+            {error}
           </div>
-        )}
+        </Card>
+      )}
 
-        {pipeline && !submitting && (
-          <dl className="space-y-2 text-sm">
-            <div className="flex justify-between">
-              <dt className="text-muted-foreground">Subject DID</dt>
-              <dd className="font-mono text-foreground text-xs">
-                did:tlh:{givenName.toLowerCase()}-{surname.toLowerCase()}
-              </dd>
-            </div>
-            <div className="flex justify-between">
-              <dt className="text-muted-foreground">Verification</dt>
-              <dd>
-                <Badge
-                  variant={
-                    pipeline.data.verificationResult === "PASS"
-                      ? "success"
-                      : "danger"
-                  }
-                >
-                  {pipeline.data.verificationResult}
-                </Badge>
-              </dd>
-            </div>
-            <div className="flex justify-between">
-              <dt className="text-muted-foreground">Proof ID</dt>
-              <dd className="font-mono text-foreground">
-                {pipeline.data.proofId}
-              </dd>
-            </div>
-            {pipeline.data.attestationId && (
-              <div>
-                <dt className="text-muted-foreground mb-1">Attestation ID</dt>
-                <dd className="font-mono text-xs text-foreground bg-muted p-2 rounded break-all">
-                  {pipeline.data.attestationId}
+      {/* Results */}
+      {pipeline && !running && (
+        <>
+          {/* Pipeline results */}
+          <Card>
+            <h2 className="text-sm font-semibold text-foreground mb-4">
+              Pipeline Results
+            </h2>
+            <dl className="space-y-3 text-sm">
+              <div className="flex justify-between">
+                <dt className="text-muted-foreground">Subject DID</dt>
+                <dd className="font-mono text-foreground text-xs">
+                  {clinicianDID}
                 </dd>
               </div>
-            )}
-            <div>
-              <dt className="text-muted-foreground mb-1">Transaction</dt>
-              <dd>
-                <a
-                  href={etherscanTxUrl(pipeline.data.txHash)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="font-mono text-xs text-accent hover:underline break-all"
-                >
-                  {pipeline.data.txHash}
-                </a>
-              </dd>
-            </div>
-          </dl>
-        )}
-      </Card>
+              <div className="flex justify-between items-center">
+                <dt className="text-muted-foreground">DECO Verification</dt>
+                <dd>
+                  <Badge
+                    variant={
+                      pipeline.data.verificationResult === "PASS"
+                        ? "success"
+                        : "danger"
+                    }
+                  >
+                    {pipeline.data.verificationResult}
+                  </Badge>
+                </dd>
+              </div>
+              <div className="flex justify-between">
+                <dt className="text-muted-foreground">Proof ID</dt>
+                <dd className="font-mono text-foreground">
+                  {pipeline.data.proofId}
+                </dd>
+              </div>
+              {pipeline.data.attestationId && (
+                <div>
+                  <dt className="text-muted-foreground mb-1">Attestation ID</dt>
+                  <dd className="font-mono text-xs text-foreground bg-muted p-2 rounded break-all">
+                    {pipeline.data.attestationId}
+                  </dd>
+                </div>
+              )}
+              <div>
+                <dt className="text-muted-foreground mb-1">
+                  Sepolia Transaction (Shared Anchor)
+                </dt>
+                <dd>
+                  <a
+                    href={etherscanTxUrl(pipeline.data.txHash)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-mono text-xs text-accent hover:underline break-all"
+                  >
+                    {pipeline.data.txHash}
+                  </a>
+                </dd>
+              </div>
+              {pipeline.data.privateTxHash && (
+                <div>
+                  <dt className="text-muted-foreground mb-1">
+                    Private Chain Transaction (Trust)
+                  </dt>
+                  <dd className="font-mono text-xs text-foreground bg-muted p-2 rounded break-all">
+                    {pipeline.data.privateTxHash}
+                  </dd>
+                </div>
+              )}
+              {!pipeline.data.privateTxHash && (
+                <div className="flex justify-between items-center">
+                  <dt className="text-muted-foreground">
+                    Private Chain Transaction
+                  </dt>
+                  <dd>
+                    <Badge variant="warning">Unavailable</Badge>
+                  </dd>
+                </div>
+              )}
+            </dl>
+          </Card>
+
+          {/* On-chain verification readback */}
+          {pipeline.data.attestationId && (
+            <OnChainVerification
+              attestationId={pipeline.data.attestationId as `0x${string}`}
+              clinicianDID={clinicianDID}
+            />
+          )}
+        </>
+      )}
     </div>
+  );
+}
+
+function OnChainVerification({
+  attestationId,
+  clinicianDID,
+}: {
+  attestationId: `0x${string}`;
+  clinicianDID: string;
+}) {
+  const subjectDID = toBytes32(clinicianDID);
+  const predicateType = toBytes32("GMC_REGISTERED");
+
+  const sepoliaAttestation = useVerifyAttestation(attestationId);
+  const trustAttestation = useTrustVerifyAttestation(attestationId);
+  const credentialValid = useIsCredentialValid(subjectDID, predicateType);
+
+  const sepoliaOk = sepoliaAttestation.data && sepoliaAttestation.data[0];
+  const trustOk = trustAttestation.data && trustAttestation.data[0];
+  const credOk = credentialValid.data === true;
+
+  const anyLoading =
+    sepoliaAttestation.isLoading ||
+    trustAttestation.isLoading ||
+    credentialValid.isLoading;
+
+  return (
+    <Card>
+      <h2 className="text-sm font-semibold text-foreground mb-2">
+        On-Chain Verification (Live Readback)
+      </h2>
+      <p className="text-xs text-muted-foreground mb-4">
+        Reading back from both chains to confirm data landed on-chain.
+      </p>
+
+      {anyLoading && (
+        <div className="space-y-2 mb-4">
+          <Skeleton className="h-3 w-48" />
+          <Skeleton className="h-3 w-64" />
+          <Skeleton className="h-3 w-56" />
+        </div>
+      )}
+
+      <div className="space-y-3">
+        <div className="flex items-center justify-between text-sm">
+          <span className="text-muted-foreground">
+            Sepolia AttestationVerifier
+          </span>
+          {sepoliaAttestation.isLoading ? (
+            <span className="text-xs text-muted-foreground">Reading...</span>
+          ) : sepoliaAttestation.error ? (
+            <Badge variant="danger">Error</Badge>
+          ) : sepoliaOk ? (
+            <Badge variant="success">Confirmed</Badge>
+          ) : (
+            <Badge variant="muted">Not Found</Badge>
+          )}
+        </div>
+
+        {sepoliaOk && sepoliaAttestation.data && (
+          <div className="ml-4 space-y-1 text-xs text-muted-foreground border-l border-border pl-3">
+            <div>
+              Result:{" "}
+              <Badge variant={sepoliaAttestation.data[3] ? "success" : "danger"}>
+                {sepoliaAttestation.data[3] ? "PASS" : "FAIL"}
+              </Badge>
+            </div>
+            <div>Subject DID: {formatBytes32(sepoliaAttestation.data[1])}</div>
+          </div>
+        )}
+
+        <div className="flex items-center justify-between text-sm">
+          <span className="text-muted-foreground">
+            Private Chain TrustAttestationVerifier
+          </span>
+          {trustAttestation.isLoading ? (
+            <span className="text-xs text-muted-foreground">Reading...</span>
+          ) : trustAttestation.error ? (
+            <Badge variant="warning">Unavailable</Badge>
+          ) : trustOk ? (
+            <Badge variant="success">Confirmed</Badge>
+          ) : (
+            <Badge variant="muted">Not Found</Badge>
+          )}
+        </div>
+
+        {trustOk && trustAttestation.data && (
+          <div className="ml-4 space-y-1 text-xs text-muted-foreground border-l border-border pl-3">
+            <div>
+              Result:{" "}
+              <Badge variant={trustAttestation.data[3] ? "success" : "danger"}>
+                {trustAttestation.data[3] ? "PASS" : "FAIL"}
+              </Badge>
+            </div>
+            <div>Subject DID: {formatBytes32(trustAttestation.data[1])}</div>
+          </div>
+        )}
+
+        <div className="flex items-center justify-between text-sm">
+          <span className="text-muted-foreground">
+            Private Chain CredentialRegistry
+          </span>
+          {credentialValid.isLoading ? (
+            <span className="text-xs text-muted-foreground">Reading...</span>
+          ) : credentialValid.error ? (
+            <Badge variant="warning">Unavailable</Badge>
+          ) : credOk ? (
+            <Badge variant="success">Credential Valid</Badge>
+          ) : (
+            <Badge variant="muted">Not Valid</Badge>
+          )}
+        </div>
+
+        <div className="border-t border-border pt-3 mt-3 flex items-center justify-between">
+          <span className="text-sm font-medium text-foreground">
+            Dual-Chain Status
+          </span>
+          {anyLoading ? (
+            <Badge variant="muted">Verifying...</Badge>
+          ) : sepoliaOk && trustOk ? (
+            <Badge variant="success">Both Chains Confirmed</Badge>
+          ) : sepoliaOk ? (
+            <Badge variant="warning">Sepolia Only</Badge>
+          ) : (
+            <Badge variant="danger">Verification Failed</Badge>
+          )}
+        </div>
+      </div>
+    </Card>
   );
 }

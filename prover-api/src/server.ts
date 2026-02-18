@@ -235,8 +235,8 @@ const LinkInquirySchema = z.object({
 const IngestSchema = z.object({
   doctorCommitment: z.string().regex(/^0x[0-9a-fA-F]{64}$/),
   valid: z.boolean(),
-  checkedAt: z.iso.datetime(),
-  expiresAt: z.iso.datetime(),
+  checkedAt: z.string().datetime(),
+  expiresAt: z.string().datetime(),
   attestationBase64: z.string().min(1),
 })
 
@@ -400,7 +400,7 @@ app.post("/deco/verify", (req, res) => {
     })
   }
 
-  const proofId = attestation.signature_hex.slice(0, 18)
+  const proofId = attestation.signature_hex.slice(2, 20)
 
   return res.json({
     result: "PASS",

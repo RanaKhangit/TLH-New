@@ -56,7 +56,7 @@ export default function AttestationsPage() {
           Attestation Viewer
         </h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Look up attestation records stored on-chain
+          Look up attestation records — Shared Anchor on Sepolia, Trust on Private Chain
         </p>
       </div>
 
@@ -71,7 +71,7 @@ export default function AttestationsPage() {
                   : "bg-muted text-muted-foreground hover:text-foreground"
               }`}
             >
-              Shared Anchor Verifier
+              Shared Anchor (Sepolia)
             </button>
             <button
               onClick={() => switchVerifier("trust")}
@@ -81,7 +81,7 @@ export default function AttestationsPage() {
                   : "bg-muted text-muted-foreground hover:text-foreground"
               }`}
             >
-              Trust Chain Verifier
+              Trust Chain (Private 100100)
             </button>
           </div>
 
@@ -175,7 +175,9 @@ export default function AttestationsPage() {
             </div>
             <div className="flex justify-between">
               <dt className="text-muted-foreground">Verifier</dt>
-              <dd className="text-foreground capitalize">{verifier}</dd>
+              <dd className="text-foreground">
+                {verifier === "shared" ? "Sepolia (11155111)" : "Private Chain (100100)"}
+              </dd>
             </div>
           </dl>
         </Card>

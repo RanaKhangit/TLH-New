@@ -1,19 +1,23 @@
 "use client";
 
 import { useReadContracts } from "wagmi";
-import { CONTRACTS } from "@/lib/contracts";
-import { DIDRegistryABI } from "@/lib/abis";
-import { AttestationVerifierABI } from "@/lib/abis";
-import { VCHashAnchorsABI } from "@/lib/abis";
-import { CredentialRegistryABI } from "@/lib/abis";
-import { TrustAttestationVerifierABI } from "@/lib/abis";
+import { CONTRACTS, PRIVATE_CHAIN_CONTRACTS } from "@/lib/contracts";
+import {
+  DIDRegistryABI,
+  AttestationVerifierABI,
+  VCHashAnchorsABI,
+  CredentialRegistryABI,
+  TrustAttestationVerifierABI,
+} from "@/lib/abis";
+import { privateChain } from "@/lib/wagmi";
 
 const ZERO_ROLE =
   "0x0000000000000000000000000000000000000000000000000000000000000000" as const;
 const ZERO_ADDR = "0x0000000000000000000000000000000000000000" as const;
 
 export function useContractHealth() {
-  const result = useReadContracts({
+  // Sepolia shared anchor contracts
+  const sepoliaResult = useReadContracts({
     contracts: [
       {
         address: CONTRACTS.DIDRegistry.proxy,
@@ -33,39 +37,61 @@ export function useContractHealth() {
         functionName: "hasRole",
         args: [ZERO_ROLE, ZERO_ADDR],
       },
+    ],
+    query: { refetchInterval: 30000 },
+  });
+
+  // Private chain trust contracts
+  const privateResult = useReadContracts({
+    contracts: [
       {
-        address: CONTRACTS.CredentialRegistry.proxy,
+        address: PRIVATE_CHAIN_CONTRACTS.CredentialRegistry.proxy,
         abi: CredentialRegistryABI,
         functionName: "hasRole",
         args: [ZERO_ROLE, ZERO_ADDR],
+        chainId: privateChain.id,
       },
       {
-        address: CONTRACTS.TrustAttestationVerifier.proxy,
+        address: PRIVATE_CHAIN_CONTRACTS.TrustAttestationVerifier.proxy,
         abi: TrustAttestationVerifierABI,
         functionName: "hasRole",
         args: [ZERO_ROLE, ZERO_ADDR],
+        chainId: privateChain.id,
       },
     ],
     query: { refetchInterval: 30000 },
   });
 
-  const names = [
+  const sepoliaNames = [
     "DIDRegistry",
     "AttestationVerifier",
     "VCHashAnchors",
+  ] as const;
+
+  const sepoliaContracts = sepoliaNames.map((name, i) => ({
+    name,
+    address: CONTRACTS[name].proxy,
+    chain: "sepolia" as const,
+    responsive: sepoliaResult.data?.[i]?.status === "success",
+  }));
+
+  const privateNames = [
     "CredentialRegistry",
     "TrustAttestationVerifier",
   ] as const;
 
-  const contracts = names.map((name, i) => ({
+  const privateContracts = privateNames.map((name, i) => ({
     name,
-    address: CONTRACTS[name].proxy,
-    responsive: result.data?.[i]?.status === "success",
+    address: PRIVATE_CHAIN_CONTRACTS[name].proxy,
+    chain: "private" as const,
+    responsive: privateResult.data?.[i]?.status === "success",
   }));
 
   return {
-    contracts,
-    isLoading: result.isLoading,
-    error: result.error,
+    sepoliaContracts,
+    privateContracts,
+    contracts: [...sepoliaContracts, ...privateContracts],
+    isLoading: sepoliaResult.isLoading || privateResult.isLoading,
+    error: sepoliaResult.error || privateResult.error,
   };
 }

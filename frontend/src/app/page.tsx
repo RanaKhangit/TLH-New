@@ -2,7 +2,8 @@
 
 import { useContractHealth } from "@/hooks/use-contract-health";
 import { useBlockNumber } from "wagmi";
-import { CONTRACTS } from "@/lib/contracts";
+import { CONTRACTS, PRIVATE_CHAIN_CONTRACTS } from "@/lib/contracts";
+import { privateChain } from "@/lib/wagmi";
 import {
   formatAddress,
   etherscanAddressUrl,
@@ -26,32 +27,43 @@ function ContractCard({
   name,
   address,
   responsive,
+  chainLabel,
+  explorerUrl,
 }: {
   name: string;
   address: string;
   responsive: boolean;
+  chainLabel: string;
+  explorerUrl?: string;
 }) {
+  const content = (
+    <span className="font-mono text-xs text-muted-foreground hover:text-accent transition-colors break-all">
+      {formatAddress(address)}
+    </span>
+  );
+
   return (
     <Card>
-      <div className="flex items-center justify-between mb-3">
+      <div className="flex items-center justify-between mb-1">
         <h3 className="text-sm font-semibold text-foreground">{name}</h3>
         <StatusDot ok={responsive} />
       </div>
-      <a
-        href={etherscanAddressUrl(address)}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="font-mono text-xs text-muted-foreground hover:text-accent transition-colors break-all"
-      >
-        {formatAddress(address)}
-      </a>
+      <div className="text-[10px] text-muted-foreground mb-2">{chainLabel}</div>
+      {explorerUrl ? (
+        <a href={explorerUrl} target="_blank" rel="noopener noreferrer">
+          {content}
+        </a>
+      ) : (
+        content
+      )}
     </Card>
   );
 }
 
 export default function DashboardPage() {
-  const { contracts, isLoading } = useContractHealth();
-  const { data: blockNumber } = useBlockNumber({ watch: true });
+  const { sepoliaContracts, privateContracts, isLoading } = useContractHealth();
+  const { data: sepoliaBlock } = useBlockNumber({ watch: true });
+  const { data: privateBlock } = useBlockNumber({ chainId: privateChain.id, watch: true });
   const [proverOk, setProverOk] = useState<boolean | undefined>(undefined);
   const [eaOk, setEaOk] = useState<boolean | undefined>(undefined);
 
@@ -70,7 +82,7 @@ export default function DashboardPage() {
       <div>
         <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Trust Layer Health system status on Sepolia
+          Trust Layer Health — dual-chain system status
         </p>
       </div>
 
@@ -79,13 +91,22 @@ export default function DashboardPage() {
         <h2 className="text-sm font-semibold text-foreground mb-4">
           System Status
         </h2>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="flex items-center gap-3">
-            <StatusDot ok={blockNumber !== undefined} />
+            <StatusDot ok={sepoliaBlock !== undefined} />
             <div>
               <div className="text-sm text-foreground">Sepolia RPC</div>
               <div className="text-xs text-muted-foreground">
-                {blockNumber ? `Block #${blockNumber.toString()}` : "Connecting..."}
+                {sepoliaBlock ? `Block #${sepoliaBlock.toString()}` : "Connecting..."}
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <StatusDot ok={privateBlock !== undefined} />
+            <div>
+              <div className="text-sm text-foreground">Private Chain</div>
+              <div className="text-xs text-muted-foreground">
+                {privateBlock ? `Block #${privateBlock.toString()}` : "Connecting..."}
               </div>
             </div>
           </div>
@@ -110,14 +131,14 @@ export default function DashboardPage() {
         </div>
       </Card>
 
-      {/* Contract cards */}
+      {/* Sepolia contracts */}
       <div>
         <h2 className="text-sm font-semibold text-foreground mb-3">
-          Deployed Contracts
+          Sepolia — Shared Anchor Contracts
         </h2>
         {isLoading ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {[1, 2, 3, 4, 5].map((i) => (
+            {[1, 2, 3].map((i) => (
               <Card key={i}>
                 <Skeleton className="h-4 w-32 mb-3" />
                 <Skeleton className="h-3 w-48" />
@@ -126,12 +147,43 @@ export default function DashboardPage() {
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {contracts.map((c) => (
+            {sepoliaContracts.map((c) => (
               <ContractCard
                 key={c.name}
                 name={c.name}
                 address={c.address}
                 responsive={c.responsive}
+                chainLabel="Sepolia (11155111)"
+                explorerUrl={etherscanAddressUrl(c.address)}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Private chain contracts */}
+      <div>
+        <h2 className="text-sm font-semibold text-foreground mb-3">
+          Private Chain — Trust Contracts
+        </h2>
+        {isLoading ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {[1, 2].map((i) => (
+              <Card key={i}>
+                <Skeleton className="h-4 w-32 mb-3" />
+                <Skeleton className="h-3 w-48" />
+              </Card>
+            ))}
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {privateContracts.map((c) => (
+              <ContractCard
+                key={c.name}
+                name={c.name}
+                address={c.address}
+                responsive={c.responsive}
+                chainLabel="Private Chain (100100)"
               />
             ))}
           </div>
@@ -142,7 +194,7 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <Card>
           <h2 className="text-sm font-semibold text-foreground mb-3">
-            Network Info
+            Sepolia Network
           </h2>
           <dl className="space-y-2 text-sm">
             <div className="flex justify-between">
@@ -179,28 +231,64 @@ export default function DashboardPage() {
 
         <Card>
           <h2 className="text-sm font-semibold text-foreground mb-3">
-            Architecture
+            Private Chain Network
           </h2>
-          <div className="font-mono text-xs text-muted-foreground space-y-1 leading-relaxed">
-            <div>Prover API (DECO Verify)</div>
-            <div className="text-accent">{"  |"}</div>
-            <div>External Adapter (Tx Submit)</div>
-            <div className="text-accent">{"  |"}</div>
-            <div>Chainlink Node (Orchestrator)</div>
-            <div className="text-accent">{"  |"}</div>
-            <div className="text-foreground font-semibold">
-              Sepolia Contracts
+          <dl className="space-y-2 text-sm">
+            <div className="flex justify-between">
+              <dt className="text-muted-foreground">Chain ID</dt>
+              <dd className="font-mono text-foreground">
+                {PRIVATE_CHAIN_CONTRACTS.chainId}
+              </dd>
             </div>
-            <div className="mt-2 grid grid-cols-2 gap-1 text-muted-foreground">
-              <span>Shared: DIDRegistry</span>
-              <span>Trust: CredentialRegistry</span>
-              <span>Shared: VCHashAnchors</span>
-              <span>Trust: TrustAttVerifier</span>
-              <span>Shared: AttVerifier</span>
+            <div className="flex justify-between">
+              <dt className="text-muted-foreground">Network</dt>
+              <dd className="text-foreground">
+                {PRIVATE_CHAIN_CONTRACTS.network}
+              </dd>
             </div>
-          </div>
+            <div className="flex justify-between">
+              <dt className="text-muted-foreground">Consensus</dt>
+              <dd className="text-foreground">IBFT 2.0 (4 validators)</dd>
+            </div>
+            <div className="flex justify-between">
+              <dt className="text-muted-foreground">Admin</dt>
+              <dd className="font-mono text-xs text-foreground">
+                {formatAddress(PRIVATE_CHAIN_CONTRACTS.admin)}
+              </dd>
+            </div>
+          </dl>
         </Card>
       </div>
+
+      {/* Architecture */}
+      <Card>
+        <h2 className="text-sm font-semibold text-foreground mb-3">
+          Architecture
+        </h2>
+        <div className="font-mono text-xs text-muted-foreground space-y-1 leading-relaxed">
+          <div>Prover API (DECO Verify)</div>
+          <div className="text-accent">{"  |"}</div>
+          <div>External Adapter (Dual-Chain Tx Submit)</div>
+          <div className="text-accent">{"  / \\"}</div>
+          <div className="grid grid-cols-2 gap-4 mt-1">
+            <div>
+              <div className="text-foreground font-semibold mb-1">
+                Sepolia (Shared Anchor)
+              </div>
+              <div>DIDRegistry</div>
+              <div>VCHashAnchors</div>
+              <div>AttestationVerifier</div>
+            </div>
+            <div>
+              <div className="text-foreground font-semibold mb-1">
+                Private Chain (Trust)
+              </div>
+              <div>CredentialRegistry</div>
+              <div>TrustAttestationVerifier</div>
+            </div>
+          </div>
+        </div>
+      </Card>
     </div>
   );
 }

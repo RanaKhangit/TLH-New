@@ -1,10 +1,11 @@
 "use client";
 
 import { useReadContract } from "wagmi";
-import { CONTRACTS } from "@/lib/contracts";
-import { AttestationVerifierABI } from "@/lib/abis";
-import { TrustAttestationVerifierABI } from "@/lib/abis";
+import { CONTRACTS, PRIVATE_CHAIN_CONTRACTS } from "@/lib/contracts";
+import { AttestationVerifierABI, TrustAttestationVerifierABI } from "@/lib/abis";
+import { privateChain } from "@/lib/wagmi";
 
+/** Shared anchor AttestationVerifier — queries Sepolia */
 export function useVerifyAttestation(
   attestationId: `0x${string}` | undefined
 ) {
@@ -17,14 +18,16 @@ export function useVerifyAttestation(
   });
 }
 
+/** Trust TrustAttestationVerifier — queries Private Chain (100100) */
 export function useTrustVerifyAttestation(
   attestationId: `0x${string}` | undefined
 ) {
   return useReadContract({
-    address: CONTRACTS.TrustAttestationVerifier.proxy,
+    address: PRIVATE_CHAIN_CONTRACTS.TrustAttestationVerifier.proxy,
     abi: TrustAttestationVerifierABI,
     functionName: "verifyAttestation",
     args: attestationId ? [attestationId] : undefined,
+    chainId: privateChain.id,
     query: { enabled: !!attestationId },
   });
 }

@@ -66,15 +66,18 @@ export default function CredentialsPage() {
           Credential Explorer
         </h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Query credential and VC anchor state on-chain
+          Query credential state on Private Chain (100100) and VC anchors on Sepolia
         </p>
       </div>
 
       {/* Credential lookup */}
       <Card>
-        <h2 className="text-sm font-semibold text-foreground mb-4">
+        <h2 className="text-sm font-semibold text-foreground mb-2">
           Credential Lookup
         </h2>
+        <p className="text-xs text-muted-foreground mb-4">
+          Reads from CredentialRegistry on Private Chain (100100)
+        </p>
         <div className="space-y-3">
           <label className="flex items-center gap-2 text-xs text-muted-foreground">
             <input
@@ -220,9 +223,12 @@ export default function CredentialsPage() {
 
       {/* Anchor lookup */}
       <Card>
-        <h2 className="text-sm font-semibold text-foreground mb-4">
+        <h2 className="text-sm font-semibold text-foreground mb-2">
           VC Hash Anchor Lookup
         </h2>
+        <p className="text-xs text-muted-foreground mb-4">
+          Reads from VCHashAnchors on Sepolia (shared anchor)
+        </p>
         <div className="space-y-3">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>

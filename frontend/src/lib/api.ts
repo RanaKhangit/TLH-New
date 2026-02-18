@@ -39,6 +39,7 @@ export interface PipelineResult {
   data: {
     result: string;
     txHash: string;
+    privateTxHash?: string;
     proofId: string;
     attestationId: string;
     verificationResult: string;
@@ -109,16 +110,9 @@ export async function triggerFullPipeline(
   surname?: string,
   givenName?: string
 ): Promise<PipelineResult> {
-  return fetchJSON<PipelineResult>(EA_API, {
+  return fetchJSON<PipelineResult>("/api/pipeline", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      id: `demo-${Date.now()}`,
-      data: {
-        clinicianDID: clinicianDID || "did:tlh:clinician-789",
-        surname,
-        givenName,
-      },
-    }),
+    body: JSON.stringify({ clinicianDID, surname, givenName }),
   });
 }

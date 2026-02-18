@@ -1,3 +1,4 @@
+/** Sepolia shared anchor contracts (DID + VCHash + AttestationVerifier) */
 export const CONTRACTS = {
   chainId: 11155111,
   network: "sepolia",
@@ -12,19 +13,22 @@ export const CONTRACTS = {
     implementation:
       "0x3b7803ba081228ea98626be219755b0295267013" as `0x${string}`,
   },
-  CredentialRegistry: {
-    proxy: "0xae4b71776fab8e431cee4874ad3a2a97588d89fb" as `0x${string}`,
-    implementation:
-      "0x94de2311e67abd4332c358b9c3a37e231f298249" as `0x${string}`,
-  },
-  TrustAttestationVerifier: {
-    proxy: "0x2ad7540b14585ebfb3c86604d1927b40e2efa5db" as `0x${string}`,
-    implementation:
-      "0x893aad8b32e77845b2485e033c7031e31c13ec9b" as `0x${string}`,
-  },
   AttestationVerifier: {
     proxy: "0xce863e465f21df87ad9f0a2af838fac1750f08d2" as `0x${string}`,
     implementation:
       "0x2ae518d86774c814a73ca03464b355a3a228ac8d" as `0x${string}`,
+  },
+} as const;
+
+/** Private trust chain contracts (Polygon Edge, chain ID 100100) */
+export const PRIVATE_CHAIN_CONTRACTS = {
+  chainId: 100100,
+  network: "TLH Private Chain",
+  admin: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266" as `0x${string}`,
+  CredentialRegistry: {
+    proxy: "0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9" as `0x${string}`,
+  },
+  TrustAttestationVerifier: {
+    proxy: "0x0165878A594ca255338adfa4d48449f69242Eb8F" as `0x${string}`,
   },
 } as const;
