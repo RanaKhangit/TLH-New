@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   triggerFullPipeline,
   fetchDoctors,
@@ -15,12 +16,46 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export default function VerifyPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
   const [doctors, setDoctors] = useState<DoctorEntry[]>([]);
   const [doctorsLoading, setDoctorsLoading] = useState(true);
   const [pipeline, setPipeline] = useState<PipelineResult | null>(null);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedName, setSelectedName] = useState(0);
+  const [restoredDID, setRestoredDID] = useState<string | null>(null);
+
+  // Restore pipeline result from URL search params on mount
+  useEffect(() => {
+    const attestationId = searchParams.get("attestationId");
+    const txHash = searchParams.get("txHash");
+    const proofId = searchParams.get("proofId");
+    const verificationResult = searchParams.get("result");
+    const privateTxHash = searchParams.get("privateTxHash");
+    const didIndex = searchParams.get("doctor");
+    const did = searchParams.get("did");
+
+    if (attestationId && txHash) {
+      setPipeline({
+        jobRunID: "restored",
+        statusCode: 200,
+        data: {
+          result: txHash,
+          txHash,
+          privateTxHash: privateTxHash || undefined,
+          proofId: proofId || "",
+          attestationId,
+          verificationResult: verificationResult || "PASS",
+        },
+      });
+      if (did) setRestoredDID(did);
+    }
+    if (didIndex) {
+      setSelectedName(Number(didIndex));
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     fetchDoctors()
@@ -38,14 +73,32 @@ export default function VerifyPage() {
     setRunning(true);
     setError(null);
     setPipeline(null);
+    setRestoredDID(null);
     try {
       const result = await triggerFullPipeline(clinicianDID, surname, givenName);
       setPipeline(result);
+
+      // Persist to URL so results survive navigation
+      const params = new URLSearchParams({
+        attestationId: result.data.attestationId,
+        txHash: result.data.txHash,
+        proofId: result.data.proofId,
+        result: result.data.verificationResult,
+        doctor: String(selectedName),
+        did: clinicianDID,
+      });
+      if (result.data.privateTxHash) {
+        params.set("privateTxHash", result.data.privateTxHash);
+      }
+      router.replace(`/verify?${params.toString()}`, { scroll: false });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Pipeline failed");
     }
     setRunning(false);
   }
+
+  // Use restored DID if we loaded from URL, otherwise use current selection
+  const activeDID = restoredDID ?? clinicianDID;
 
   return (
     <div className="space-y-8">
@@ -69,6 +122,8 @@ export default function VerifyPage() {
             setSelectedName(Number(e.target.value));
             setPipeline(null);
             setError(null);
+            setRestoredDID(null);
+            router.replace("/verify", { scroll: false });
           }}
           className="w-full rounded-lg border border-border bg-muted px-3 py-2 text-sm text-foreground mb-4"
         >
@@ -133,7 +188,7 @@ export default function VerifyPage() {
               <div className="flex justify-between">
                 <dt className="text-muted-foreground">Subject DID</dt>
                 <dd className="font-mono text-foreground text-xs">
-                  {clinicianDID}
+                  {activeDID}
                 </dd>
               </div>
               <div className="flex justify-between items-center">
@@ -206,10 +261,30 @@ export default function VerifyPage() {
           {pipeline.data.attestationId && (
             <OnChainVerification
               attestationId={pipeline.data.attestationId as `0x${string}`}
-              clinicianDID={clinicianDID}
+              clinicianDID={activeDID}
               privateChainAvailable={!!pipeline.data.privateTxHash}
             />
           )}
+
+          {/* Link to DID Explorer */}
+          <Card>
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-sm font-semibold text-foreground">
+                  Explore This DID
+                </h2>
+                <p className="text-xs text-muted-foreground mt-1">
+                  View full history and linked data in Explorer
+                </p>
+              </div>
+              <a
+                href={`/explorer?did=${encodeURIComponent(activeDID)}&attestationId=${pipeline.data.attestationId}`}
+                className="rounded-lg bg-muted px-4 py-2 text-sm font-medium text-foreground hover:bg-muted/80 transition-colors"
+              >
+                View in Explorer →
+              </a>
+            </div>
+          </Card>
         </>
       )}
     </div>
@@ -280,7 +355,7 @@ function OnChainVerification({
           ) : sepoliaOk ? (
             <Badge variant="success">Confirmed</Badge>
           ) : (
-            <Badge variant="muted">Not Found</Badge>
+            <Badge variant="warning">Confirming...</Badge>
           )}
         </div>
 
@@ -309,7 +384,7 @@ function OnChainVerification({
           ) : trustOk ? (
             <Badge variant="success">Confirmed</Badge>
           ) : (
-            <Badge variant="muted">Not Found</Badge>
+            <Badge variant="warning">Confirming...</Badge>
           )}
         </div>
 
@@ -338,7 +413,7 @@ function OnChainVerification({
           ) : credOk ? (
             <Badge variant="success">Credential Valid</Badge>
           ) : (
-            <Badge variant="muted">Not Valid</Badge>
+            <Badge variant="warning">Confirming...</Badge>
           )}
         </div>
 
@@ -355,7 +430,7 @@ function OnChainVerification({
           ) : sepoliaOk ? (
             <Badge variant="warning">Sepolia Only</Badge>
           ) : (
-            <Badge variant="danger">Verification Failed</Badge>
+            <Badge variant="warning">Confirming on Sepolia...</Badge>
           )}
         </div>
       </div>

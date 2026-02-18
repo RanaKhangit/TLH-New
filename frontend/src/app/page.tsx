@@ -190,6 +190,73 @@ export default function DashboardPage() {
         )}
       </div>
 
+      {/* CCIP Cross-Chain Bridge */}
+      <div>
+        <h2 className="text-sm font-semibold text-foreground mb-3">
+          CCIP Cross-Chain Bridge
+        </h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <ContractCard
+            name="TLHCCIPReceiver"
+            address={CONTRACTS.TLHCCIPReceiver.proxy}
+            responsive={true}
+            chainLabel="Sepolia (11155111)"
+            explorerUrl={etherscanAddressUrl(CONTRACTS.TLHCCIPReceiver.proxy)}
+          />
+          <ContractCard
+            name="TLHCCIPSender"
+            address={CONTRACTS.TLHCCIPSender.proxy}
+            responsive={true}
+            chainLabel="Sepolia (11155111)"
+            explorerUrl={etherscanAddressUrl(CONTRACTS.TLHCCIPSender.proxy)}
+          />
+          <Card>
+            <div className="flex items-center justify-between mb-1">
+              <h3 className="text-sm font-semibold text-foreground">CCIP Router</h3>
+              <StatusDot ok={true} />
+            </div>
+            <div className="text-[10px] text-muted-foreground mb-2">Chainlink Infrastructure</div>
+            <a
+              href={etherscanAddressUrl(CONTRACTS.CCIPRouter)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-mono text-xs text-muted-foreground hover:text-accent transition-colors"
+            >
+              {formatAddress(CONTRACTS.CCIPRouter)}
+            </a>
+          </Card>
+        </div>
+      </div>
+
+      {/* Chainlink Automation */}
+      <Card>
+        <h2 className="text-sm font-semibold text-foreground mb-4">
+          Chainlink Automation
+        </h2>
+        <div className="space-y-3">
+          <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+            <div>
+              <div className="text-sm font-medium text-foreground">deco-verification</div>
+              <div className="text-xs text-muted-foreground">Webhook — On-demand DECO verification</div>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-success">Configured</span>
+              <StatusDot ok={true} />
+            </div>
+          </div>
+          <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+            <div>
+              <div className="text-sm font-medium text-foreground">deco-verification-cron</div>
+              <div className="text-xs text-muted-foreground">Cron (Every 1 min) — Scheduled verification</div>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-success">Configured</span>
+              <StatusDot ok={true} />
+            </div>
+          </div>
+        </div>
+      </Card>
+
       {/* Network info */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <Card>
@@ -278,6 +345,7 @@ export default function DashboardPage() {
               <div>DIDRegistry</div>
               <div>VCHashAnchors</div>
               <div>AttestationVerifier</div>
+              <div className="text-accent mt-1">TLHCCIPReceiver</div>
             </div>
             <div>
               <div className="text-foreground font-semibold mb-1">
@@ -285,8 +353,10 @@ export default function DashboardPage() {
               </div>
               <div>CredentialRegistry</div>
               <div>TrustAttestationVerifier</div>
+              <div className="text-accent mt-1">TLHCCIPSender</div>
             </div>
           </div>
+          <div className="text-center text-accent mt-2">{"<── CCIP Bridge ──>"}</div>
         </div>
       </Card>
     </div>

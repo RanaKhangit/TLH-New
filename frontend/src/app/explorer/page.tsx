@@ -1,0 +1,763 @@
+"use client";
+
+import { useState, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
+
+// DID tab imports
+import { useResolveDID } from "@/hooks/use-did-registry";
+import { useGetAttestation } from "@/hooks/use-attestation-by-did";
+
+// Credentials tab imports
+import { useGetCredential, useIsCredentialValid } from "@/hooks/use-credential-registry";
+import { useGetAnchor } from "@/hooks/use-vc-anchors";
+
+// Attestations tab imports
+import {
+  useVerifyAttestation,
+  useTrustVerifyAttestation,
+} from "@/hooks/use-attestation-verifier";
+
+import {
+  formatTimestamp,
+  formatTimestampRelative,
+  formatAddress,
+  formatBytes32,
+  toBytes32,
+  isValidBytes32,
+  etherscanAddressUrl,
+  credentialStatusLabel,
+} from "@/lib/utils";
+import { Card } from "@/components/ui/card";
+import { Badge, type BadgeVariant } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
+
+type Tab = "did" | "credentials" | "attestations";
+
+const TABS: { key: Tab; label: string }[] = [
+  { key: "did", label: "DID" },
+  { key: "credentials", label: "Credentials" },
+  { key: "attestations", label: "Attestations" },
+];
+
+export default function ExplorerPage() {
+  const searchParams = useSearchParams();
+  const [activeTab, setActiveTab] = useState<Tab>("did");
+
+  // Accept tab from URL (e.g. /explorer?tab=attestations)
+  useEffect(() => {
+    const tab = searchParams.get("tab");
+    if (tab === "credentials" || tab === "attestations") {
+      setActiveTab(tab);
+    }
+  }, [searchParams]);
+
+  return (
+    <div className="space-y-8">
+      <div>
+        <h1 className="text-2xl font-bold text-foreground">Explorer</h1>
+        <p className="text-sm text-muted-foreground mt-1">
+          Query on-chain data — DIDs, Credentials, and Attestations
+        </p>
+      </div>
+
+      {/* Tab bar */}
+      <div className="flex gap-1 border-b border-border">
+        {TABS.map((tab) => (
+          <button
+            key={tab.key}
+            onClick={() => setActiveTab(tab.key)}
+            className={`px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px ${
+              activeTab === tab.key
+                ? "border-accent text-accent"
+                : "border-transparent text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Tab content */}
+      {activeTab === "did" && <DIDTab />}
+      {activeTab === "credentials" && <CredentialsTab />}
+      {activeTab === "attestations" && <AttestationsTab />}
+    </div>
+  );
+}
+
+/* ─── DID Tab ─── */
+
+const DEMO_DIDS = [
+  { label: "did:tlh:clinician-789", value: "did:tlh:clinician-789" },
+  { label: "did:tlh:patient-123", value: "did:tlh:patient-123" },
+];
+
+function DIDTab() {
+  const searchParams = useSearchParams();
+
+  const [input, setInput] = useState("");
+  const [hashMode, setHashMode] = useState(true);
+  const [queriedDID, setQueriedDID] = useState<`0x${string}` | undefined>();
+  const [inputError, setInputError] = useState<string | null>(null);
+  const [highlightedAttestation, setHighlightedAttestation] = useState<`0x${string}` | undefined>();
+
+  const { data, isLoading, error } = useResolveDID(queriedDID);
+
+  useEffect(() => {
+    const did = searchParams.get("did");
+    const attestationId = searchParams.get("attestationId");
+    if (did) {
+      setInput(did);
+      setHashMode(true);
+      setQueriedDID(toBytes32(did));
+    }
+    if (attestationId) {
+      setHighlightedAttestation(attestationId as `0x${string}`);
+    }
+  }, [searchParams]);
+
+  function handleResolve() {
+    setInputError(null);
+    if (!input.trim()) return;
+    if (hashMode) {
+      setQueriedDID(toBytes32(input.trim()));
+    } else {
+      if (isValidBytes32(input.trim())) {
+        setQueriedDID(input.trim() as `0x${string}`);
+      } else {
+        setInputError("Invalid format — must be 0x followed by 64 hex characters.");
+      }
+    }
+  }
+
+  const notFound = error?.message?.includes("revert") || error?.message?.includes("DIDNotFound");
+
+  return (
+    <div className="space-y-6">
+      <Card>
+        <div className="space-y-4">
+          <div className="flex items-center gap-3">
+            <label className="flex items-center gap-2 text-xs text-muted-foreground">
+              <input
+                type="checkbox"
+                checked={hashMode}
+                onChange={(e) => setHashMode(e.target.checked)}
+                className="rounded"
+              />
+              Hash string to bytes32 (keccak256)
+            </label>
+          </div>
+
+          <div className="flex gap-3">
+            <div className="flex-1">
+              <input
+                type="text"
+                value={input}
+                onChange={(e) => { setInput(e.target.value); setInputError(null); }}
+                placeholder={hashMode ? "e.g. did:tlh:clinician-789" : "0x... (bytes32 hex)"}
+                className={`w-full rounded-lg border bg-muted px-3 py-2 text-sm text-foreground font-mono placeholder:text-muted-foreground ${inputError ? "border-danger" : "border-border"}`}
+                onKeyDown={(e) => e.key === "Enter" && handleResolve()}
+              />
+            </div>
+            <button
+              onClick={handleResolve}
+              disabled={!input.trim() || isLoading}
+              className="rounded-lg bg-accent px-4 py-2 text-xs font-bold text-accent-foreground hover:bg-accent/80 transition-colors disabled:opacity-50"
+            >
+              {isLoading ? "Resolving..." : "Resolve DID"}
+            </button>
+          </div>
+          {inputError && <p className="text-xs text-danger">{inputError}</p>}
+
+          <div className="flex gap-2">
+            {DEMO_DIDS.map((d) => (
+              <button
+                key={d.value}
+                onClick={() => { setInput(d.value); setHashMode(true); }}
+                className="rounded-md bg-muted px-2 py-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+              >
+                {d.label}
+              </button>
+            ))}
+          </div>
+
+          {queriedDID && (
+            <div className="text-xs text-muted-foreground font-mono">
+              Querying: {queriedDID}
+            </div>
+          )}
+        </div>
+      </Card>
+
+      {isLoading && queriedDID && (
+        <Card>
+          <Skeleton className="h-4 w-24 mb-4" />
+          <div className="space-y-3">
+            <Skeleton className="h-3 w-full" />
+            <Skeleton className="h-3 w-3/4" />
+            <Skeleton className="h-3 w-full" />
+            <Skeleton className="h-3 w-1/2" />
+          </div>
+        </Card>
+      )}
+
+      {notFound && queriedDID && (
+        <Card>
+          <div className="text-center py-4">
+            <Badge variant="muted">DID Not Found</Badge>
+            <p className="text-sm text-muted-foreground mt-2">
+              This DID is not registered in the DIDRegistry contract.
+            </p>
+          </div>
+        </Card>
+      )}
+
+      {data && !notFound && (
+        <Card>
+          <h2 className="text-sm font-semibold text-foreground mb-4">DID Record</h2>
+          <dl className="space-y-3 text-sm">
+            <div className="flex justify-between items-center">
+              <dt className="text-muted-foreground">Status</dt>
+              <dd>
+                <Badge variant={data[1] ? "success" : "danger"}>
+                  {data[1] ? "Active" : "Deactivated"}
+                </Badge>
+              </dd>
+            </div>
+            <div className="flex justify-between">
+              <dt className="text-muted-foreground">Controller</dt>
+              <dd>
+                <a
+                  href={etherscanAddressUrl(data[0])}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-mono text-accent hover:underline"
+                >
+                  {formatAddress(data[0])}
+                </a>
+              </dd>
+            </div>
+            <div className="flex justify-between">
+              <dt className="text-muted-foreground">Registered At</dt>
+              <dd className="text-foreground">
+                {formatTimestamp(data[2])}{" "}
+                <span className="text-muted-foreground text-xs">
+                  ({formatTimestampRelative(data[2])})
+                </span>
+              </dd>
+            </div>
+            <div className="flex justify-between">
+              <dt className="text-muted-foreground">Updated At</dt>
+              <dd className="text-foreground">
+                {formatTimestamp(data[3])}{" "}
+                <span className="text-muted-foreground text-xs">
+                  ({formatTimestampRelative(data[3])})
+                </span>
+              </dd>
+            </div>
+          </dl>
+        </Card>
+      )}
+
+      {data && !notFound && queriedDID && (
+        <AttestationsForDID
+          subjectDID={queriedDID}
+          highlightedAttestation={highlightedAttestation}
+        />
+      )}
+    </div>
+  );
+}
+
+function AttestationsForDID({
+  subjectDID,
+  highlightedAttestation,
+}: {
+  subjectDID: `0x${string}`;
+  highlightedAttestation?: `0x${string}`;
+}) {
+  const attestation = useGetAttestation(highlightedAttestation);
+  void subjectDID;
+
+  if (!highlightedAttestation) {
+    return (
+      <Card>
+        <h2 className="text-sm font-semibold text-foreground mb-2">Attestations</h2>
+        <p className="text-xs text-muted-foreground">
+          No attestation selected. Run a verification from the Verify Credential page to see attestation details here.
+        </p>
+      </Card>
+    );
+  }
+
+  return (
+    <Card>
+      <h2 className="text-sm font-semibold text-foreground mb-4">Attestation Details</h2>
+      {attestation.isLoading && (
+        <div className="space-y-2">
+          <Skeleton className="h-3 w-48" />
+          <Skeleton className="h-3 w-full" />
+        </div>
+      )}
+      {attestation.error && <Badge variant="danger">Failed to load attestation</Badge>}
+      {attestation.data && (
+        <dl className="space-y-3 text-sm">
+          <div className="flex justify-between items-center">
+            <dt className="text-muted-foreground">Status</dt>
+            <dd>
+              <Badge variant={attestation.data[0] ? "success" : "muted"}>
+                {attestation.data[0] ? "On-Chain" : "Not Found"}
+              </Badge>
+            </dd>
+          </div>
+          <div>
+            <dt className="text-muted-foreground mb-1">Attestation ID</dt>
+            <dd className="font-mono text-xs text-foreground bg-muted p-2 rounded break-all">
+              {highlightedAttestation}
+            </dd>
+          </div>
+          <div className="flex justify-between items-center">
+            <dt className="text-muted-foreground">Result</dt>
+            <dd>
+              <Badge variant={attestation.data[3] ? "success" : "danger"}>
+                {attestation.data[3] ? "PASS" : "FAIL"}
+              </Badge>
+            </dd>
+          </div>
+          <div>
+            <dt className="text-muted-foreground mb-1">Subject DID (bytes32)</dt>
+            <dd className="font-mono text-xs text-foreground bg-muted p-2 rounded break-all">
+              {formatBytes32(attestation.data[1])}
+            </dd>
+          </div>
+        </dl>
+      )}
+    </Card>
+  );
+}
+
+/* ─── Credentials Tab ─── */
+
+function statusBadgeVariant(status: number): BadgeVariant {
+  if (status === 0) return "success";
+  if (status === 2) return "danger";
+  return "warning";
+}
+
+function CredentialsTab() {
+  const [didInput, setDidInput] = useState("");
+  const [predInput, setPredInput] = useState("GMC_REGISTERED");
+  const [hashMode, setHashMode] = useState(true);
+  const [queriedDID, setQueriedDID] = useState<`0x${string}` | undefined>();
+  const [queriedPred, setQueriedPred] = useState<`0x${string}` | undefined>();
+
+  const [anchorVcType, setAnchorVcType] = useState("GMC_LICENSE");
+  const [anchorDID, setAnchorDID] = useState<`0x${string}` | undefined>();
+  const [anchorType, setAnchorType] = useState<`0x${string}` | undefined>();
+
+  const { data: credential, isLoading: credLoading, error: credError } =
+    useGetCredential(queriedDID, queriedPred);
+  const { data: isValid, isLoading: validLoading } =
+    useIsCredentialValid(queriedDID, queriedPred);
+  const { data: anchor, isLoading: anchorLoading, error: anchorError } =
+    useGetAnchor(anchorDID, anchorType);
+
+  function handleQuery() {
+    if (!didInput.trim() || !predInput.trim()) return;
+    const did = hashMode ? toBytes32(didInput.trim()) : (didInput.trim() as `0x${string}`);
+    const pred = hashMode ? toBytes32(predInput.trim()) : (predInput.trim() as `0x${string}`);
+    setQueriedDID(did);
+    setQueriedPred(pred);
+  }
+
+  function handleAnchorQuery() {
+    if (!didInput.trim() || !anchorVcType.trim()) return;
+    const did = hashMode ? toBytes32(didInput.trim()) : (didInput.trim() as `0x${string}`);
+    const vt = hashMode ? toBytes32(anchorVcType.trim()) : (anchorVcType.trim() as `0x${string}`);
+    setAnchorDID(did);
+    setAnchorType(vt);
+  }
+
+  const notFound =
+    credError?.message?.includes("revert") ||
+    credError?.message?.includes("CredentialNotFound");
+
+  return (
+    <div className="space-y-6">
+      {/* Credential lookup */}
+      <Card>
+        <h2 className="text-sm font-semibold text-foreground mb-2">Credential Lookup</h2>
+        <p className="text-xs text-muted-foreground mb-4">
+          Reads from CredentialRegistry on Private Chain (100100)
+        </p>
+        <div className="space-y-3">
+          <label className="flex items-center gap-2 text-xs text-muted-foreground">
+            <input
+              type="checkbox"
+              checked={hashMode}
+              onChange={(e) => setHashMode(e.target.checked)}
+              className="rounded"
+            />
+            Hash strings to bytes32
+          </label>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs text-muted-foreground mb-1">Subject DID</label>
+              <input
+                type="text"
+                value={didInput}
+                onChange={(e) => setDidInput(e.target.value)}
+                placeholder="did:tlh:clinician-789"
+                className="w-full rounded-lg border border-border bg-muted px-3 py-2 text-sm text-foreground font-mono placeholder:text-muted-foreground"
+                onKeyDown={(e) => e.key === "Enter" && handleQuery()}
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-muted-foreground mb-1">Predicate Type</label>
+              <input
+                type="text"
+                value={predInput}
+                onChange={(e) => setPredInput(e.target.value)}
+                placeholder="GMC_REGISTERED"
+                className="w-full rounded-lg border border-border bg-muted px-3 py-2 text-sm text-foreground font-mono placeholder:text-muted-foreground"
+                onKeyDown={(e) => e.key === "Enter" && handleQuery()}
+              />
+            </div>
+          </div>
+          <button
+            onClick={handleQuery}
+            disabled={credLoading || !didInput.trim()}
+            className="rounded-lg bg-accent px-4 py-2 text-xs font-bold text-accent-foreground hover:bg-accent/80 transition-colors disabled:opacity-50"
+          >
+            {credLoading ? "Loading..." : "Get Credential"}
+          </button>
+        </div>
+      </Card>
+
+      {credLoading && queriedDID && (
+        <Card>
+          <Skeleton className="h-4 w-32 mb-4" />
+          <div className="space-y-3">
+            <Skeleton className="h-3 w-full" />
+            <Skeleton className="h-3 w-3/4" />
+            <Skeleton className="h-3 w-full" />
+            <Skeleton className="h-3 w-1/2" />
+          </div>
+        </Card>
+      )}
+
+      {notFound && queriedDID && (
+        <Card>
+          <div className="text-center py-4">
+            <Badge variant="muted">Credential Not Found</Badge>
+            <p className="text-sm text-muted-foreground mt-2">
+              No credential record exists for this DID + predicate pair.
+            </p>
+          </div>
+        </Card>
+      )}
+
+      {credential && !notFound && (
+        <Card>
+          <h2 className="text-sm font-semibold text-foreground mb-4">Credential Record</h2>
+          <dl className="space-y-3 text-sm">
+            <div className="flex justify-between items-center">
+              <dt className="text-muted-foreground">Status</dt>
+              <dd>
+                <Badge variant={statusBadgeVariant(credential.status)}>
+                  {credentialStatusLabel(credential.status)}
+                </Badge>
+              </dd>
+            </div>
+            <div className="flex justify-between items-center">
+              <dt className="text-muted-foreground">Valid</dt>
+              <dd>
+                <Badge variant={credential.valid ? "success" : "danger"}>
+                  {credential.valid ? "Yes" : "No"}
+                </Badge>
+              </dd>
+            </div>
+            <div className="flex justify-between items-center">
+              <dt className="text-muted-foreground">Live Validity Check</dt>
+              <dd>
+                {validLoading ? (
+                  <span className="text-muted-foreground text-xs">Checking...</span>
+                ) : (
+                  <Badge variant={isValid ? "success" : "danger"}>
+                    {isValid ? "Currently Valid" : "Currently Invalid"}
+                  </Badge>
+                )}
+              </dd>
+            </div>
+            <div className="flex justify-between">
+              <dt className="text-muted-foreground">Subject DID</dt>
+              <dd className="font-mono text-xs text-foreground">{formatBytes32(credential.subjectDID)}</dd>
+            </div>
+            <div className="flex justify-between">
+              <dt className="text-muted-foreground">Predicate Type</dt>
+              <dd className="font-mono text-xs text-foreground">{formatBytes32(credential.predicateType)}</dd>
+            </div>
+            <div className="flex justify-between">
+              <dt className="text-muted-foreground">Checked At</dt>
+              <dd className="text-foreground">{formatTimestamp(credential.checkedAt)}</dd>
+            </div>
+            <div className="flex justify-between">
+              <dt className="text-muted-foreground">Expires At</dt>
+              <dd className="text-foreground">
+                {credential.expiresAt === 0n
+                  ? "Never"
+                  : `${formatTimestamp(credential.expiresAt)} (${formatTimestampRelative(credential.expiresAt)})`}
+              </dd>
+            </div>
+            <div className="flex justify-between">
+              <dt className="text-muted-foreground">Attestation ID</dt>
+              <dd className="font-mono text-xs text-foreground">{formatBytes32(credential.attestationId)}</dd>
+            </div>
+          </dl>
+        </Card>
+      )}
+
+      {/* Anchor lookup */}
+      <Card>
+        <h2 className="text-sm font-semibold text-foreground mb-2">VC Hash Anchor Lookup</h2>
+        <p className="text-xs text-muted-foreground mb-4">
+          Reads from VCHashAnchors on Sepolia (shared anchor)
+        </p>
+        <div className="space-y-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs text-muted-foreground mb-1">Subject DID (same as above)</label>
+              <input
+                type="text"
+                value={didInput}
+                disabled
+                className="w-full rounded-lg border border-border bg-muted/50 px-3 py-2 text-sm text-muted-foreground font-mono"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-muted-foreground mb-1">VC Type</label>
+              <input
+                type="text"
+                value={anchorVcType}
+                onChange={(e) => setAnchorVcType(e.target.value)}
+                placeholder="GMC_LICENSE"
+                className="w-full rounded-lg border border-border bg-muted px-3 py-2 text-sm text-foreground font-mono placeholder:text-muted-foreground"
+                onKeyDown={(e) => e.key === "Enter" && handleAnchorQuery()}
+              />
+            </div>
+          </div>
+          <button
+            onClick={handleAnchorQuery}
+            disabled={anchorLoading || !didInput.trim()}
+            className="rounded-lg bg-muted px-4 py-2 text-xs font-medium text-foreground hover:bg-muted/80 transition-colors disabled:opacity-50"
+          >
+            {anchorLoading ? "Loading..." : "Get Anchor"}
+          </button>
+        </div>
+      </Card>
+
+      {anchorLoading && anchorDID && (
+        <Card>
+          <Skeleton className="h-4 w-32 mb-4" />
+          <div className="space-y-3">
+            <Skeleton className="h-3 w-full" />
+            <Skeleton className="h-3 w-3/4" />
+            <Skeleton className="h-3 w-1/2" />
+          </div>
+        </Card>
+      )}
+
+      {anchorError && anchorDID && (
+        <Card>
+          <div className="text-center py-4">
+            <Badge variant="muted">Anchor Not Found</Badge>
+          </div>
+        </Card>
+      )}
+
+      {anchor && !anchorError && (
+        <Card>
+          <h2 className="text-sm font-semibold text-foreground mb-4">Anchor Record</h2>
+          <dl className="space-y-3 text-sm">
+            <div className="flex justify-between">
+              <dt className="text-muted-foreground">Content Hash</dt>
+              <dd className="font-mono text-xs text-foreground">{formatBytes32(anchor[0])}</dd>
+            </div>
+            <div className="flex justify-between">
+              <dt className="text-muted-foreground">Anchored At</dt>
+              <dd className="text-foreground">{formatTimestamp(anchor[1])}</dd>
+            </div>
+            <div className="flex justify-between items-center">
+              <dt className="text-muted-foreground">Revoked</dt>
+              <dd>
+                <Badge variant={anchor[2] ? "danger" : "success"}>
+                  {anchor[2] ? "Revoked" : "Active"}
+                </Badge>
+              </dd>
+            </div>
+          </dl>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+/* ─── Attestations Tab ─── */
+
+function AttestationsTab() {
+  const [input, setInput] = useState("");
+  const [verifier, setVerifier] = useState<"shared" | "trust">("shared");
+  const [queriedId, setQueriedId] = useState<`0x${string}` | undefined>();
+  const [inputError, setInputError] = useState<string | null>(null);
+
+  const sharedResult = useVerifyAttestation(
+    verifier === "shared" ? queriedId : undefined
+  );
+  const trustResult = useTrustVerifyAttestation(
+    verifier === "trust" ? queriedId : undefined
+  );
+
+  const result = verifier === "shared" ? sharedResult : trustResult;
+  const { data, isLoading, error } = result;
+
+  function handleLookup() {
+    setInputError(null);
+    if (!input.trim()) return;
+    if (isValidBytes32(input.trim())) {
+      setQueriedId(input.trim() as `0x${string}`);
+    } else {
+      setInputError("Invalid format — must be 0x followed by 64 hex characters.");
+    }
+  }
+
+  function switchVerifier(v: "shared" | "trust") {
+    setVerifier(v);
+    setQueriedId(undefined);
+    setInputError(null);
+  }
+
+  const notFound = data && !data[0];
+
+  return (
+    <div className="space-y-6">
+      <Card>
+        <div className="space-y-4">
+          <div className="flex gap-3">
+            <button
+              onClick={() => switchVerifier("shared")}
+              className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+                verifier === "shared"
+                  ? "bg-accent/10 text-accent"
+                  : "bg-muted text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              Shared Anchor (Sepolia)
+            </button>
+            <button
+              onClick={() => switchVerifier("trust")}
+              className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+                verifier === "trust"
+                  ? "bg-accent/10 text-accent"
+                  : "bg-muted text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              Trust Chain (Private 100100)
+            </button>
+          </div>
+
+          <div className="flex gap-3">
+            <input
+              type="text"
+              value={input}
+              onChange={(e) => { setInput(e.target.value); setInputError(null); }}
+              placeholder="Attestation ID (0x... bytes32)"
+              className={`flex-1 rounded-lg border bg-muted px-3 py-2 text-sm text-foreground font-mono placeholder:text-muted-foreground ${inputError ? "border-danger" : "border-border"}`}
+              onKeyDown={(e) => e.key === "Enter" && handleLookup()}
+            />
+            <button
+              onClick={handleLookup}
+              disabled={!input.trim() || isLoading}
+              className="rounded-lg bg-accent px-4 py-2 text-xs font-bold text-accent-foreground hover:bg-accent/80 transition-colors disabled:opacity-50"
+            >
+              {isLoading ? "Looking up..." : "Look Up"}
+            </button>
+          </div>
+          {inputError && <p className="text-xs text-danger">{inputError}</p>}
+        </div>
+      </Card>
+
+      {isLoading && queriedId && (
+        <Card>
+          <Skeleton className="h-4 w-32 mb-4" />
+          <div className="space-y-3">
+            <Skeleton className="h-3 w-full" />
+            <Skeleton className="h-3 w-3/4" />
+            <Skeleton className="h-3 w-full" />
+            <Skeleton className="h-3 w-1/2" />
+          </div>
+        </Card>
+      )}
+
+      {notFound && queriedId && (
+        <Card>
+          <div className="text-center py-4">
+            <Badge variant="muted">Attestation Not Found</Badge>
+            <p className="text-sm text-muted-foreground mt-2">
+              No attestation with this ID exists on the{" "}
+              {verifier === "shared" ? "Shared Anchor" : "Trust Chain"} verifier.
+            </p>
+          </div>
+        </Card>
+      )}
+
+      {data && data[0] && (
+        <Card>
+          <h2 className="text-sm font-semibold text-foreground mb-4">Attestation Record</h2>
+          <dl className="space-y-3 text-sm">
+            <div className="flex justify-between items-center">
+              <dt className="text-muted-foreground">Exists</dt>
+              <dd><Badge variant="success">Yes</Badge></dd>
+            </div>
+            <div className="flex justify-between items-center">
+              <dt className="text-muted-foreground">Result</dt>
+              <dd>
+                <Badge variant={data[3] ? "success" : "danger"}>
+                  {data[3] ? "PASS (Positive)" : "FAIL (Negative)"}
+                </Badge>
+              </dd>
+            </div>
+            <div className="flex justify-between">
+              <dt className="text-muted-foreground">Subject DID</dt>
+              <dd className="font-mono text-xs text-foreground">{formatBytes32(data[1])}</dd>
+            </div>
+            <div className="flex justify-between">
+              <dt className="text-muted-foreground">Predicate Hash</dt>
+              <dd className="font-mono text-xs text-foreground">{formatBytes32(data[2])}</dd>
+            </div>
+            <div className="flex justify-between">
+              <dt className="text-muted-foreground">Timestamp</dt>
+              <dd className="text-foreground">
+                {formatTimestamp(data[4])}{" "}
+                <span className="text-muted-foreground text-xs">({formatTimestampRelative(data[4])})</span>
+              </dd>
+            </div>
+            <div className="flex justify-between">
+              <dt className="text-muted-foreground">Verifier</dt>
+              <dd className="text-foreground">
+                {verifier === "shared" ? "Sepolia (11155111)" : "Private Chain (100100)"}
+              </dd>
+            </div>
+          </dl>
+        </Card>
+      )}
+
+      {error && !notFound && (
+        <Card>
+          <div className="rounded-lg bg-danger/10 border border-danger/20 p-3 text-sm text-danger">
+            Error: {error.message?.slice(0, 200)}
+          </div>
+        </Card>
+      )}
+    </div>
+  );
+}

@@ -1,11 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import { useResolveDID } from "@/hooks/use-did-registry";
+import { useGetAttestation } from "@/hooks/use-attestation-by-did";
 import {
   formatTimestamp,
   formatTimestampRelative,
   formatAddress,
+  formatBytes32,
   toBytes32,
   isValidBytes32,
   etherscanAddressUrl,
@@ -20,12 +23,30 @@ const DEMO_DIDS = [
 ];
 
 export default function DIDExplorerPage() {
+  const searchParams = useSearchParams();
+
   const [input, setInput] = useState("");
   const [hashMode, setHashMode] = useState(true);
   const [queriedDID, setQueriedDID] = useState<`0x${string}` | undefined>();
   const [inputError, setInputError] = useState<string | null>(null);
+  const [highlightedAttestation, setHighlightedAttestation] = useState<`0x${string}` | undefined>();
 
   const { data, isLoading, error } = useResolveDID(queriedDID);
+
+  // Accept DID and attestationId from URL (e.g. from Verify page link)
+  useEffect(() => {
+    const did = searchParams.get("did");
+    const attestationId = searchParams.get("attestationId");
+
+    if (did) {
+      setInput(did);
+      setHashMode(true);
+      setQueriedDID(toBytes32(did));
+    }
+    if (attestationId) {
+      setHighlightedAttestation(attestationId as `0x${string}`);
+    }
+  }, [searchParams]);
 
   function handleResolve() {
     setInputError(null);
@@ -187,6 +208,92 @@ export default function DIDExplorerPage() {
           </dl>
         </Card>
       )}
+
+      {data && !notFound && queriedDID && (
+        <AttestationsForDID
+          subjectDID={queriedDID}
+          highlightedAttestation={highlightedAttestation}
+        />
+      )}
     </div>
+  );
+}
+
+function AttestationsForDID({
+  subjectDID,
+  highlightedAttestation,
+}: {
+  subjectDID: `0x${string}`;
+  highlightedAttestation?: `0x${string}`;
+}) {
+  const attestation = useGetAttestation(highlightedAttestation);
+
+  // Suppress unused-var lint — subjectDID reserved for future event-log queries
+  void subjectDID;
+
+  if (!highlightedAttestation) {
+    return (
+      <Card>
+        <h2 className="text-sm font-semibold text-foreground mb-2">
+          Attestations
+        </h2>
+        <p className="text-xs text-muted-foreground">
+          No attestation selected. Run a verification from the Verify Credential
+          page to see attestation details here.
+        </p>
+      </Card>
+    );
+  }
+
+  return (
+    <Card>
+      <h2 className="text-sm font-semibold text-foreground mb-4">
+        Attestation Details
+      </h2>
+
+      {attestation.isLoading && (
+        <div className="space-y-2">
+          <Skeleton className="h-3 w-48" />
+          <Skeleton className="h-3 w-full" />
+        </div>
+      )}
+
+      {attestation.error && (
+        <Badge variant="danger">Failed to load attestation</Badge>
+      )}
+
+      {attestation.data && (
+        <dl className="space-y-3 text-sm">
+          <div className="flex justify-between items-center">
+            <dt className="text-muted-foreground">Status</dt>
+            <dd>
+              <Badge variant={attestation.data[0] ? "success" : "muted"}>
+                {attestation.data[0] ? "On-Chain" : "Not Found"}
+              </Badge>
+            </dd>
+          </div>
+          <div>
+            <dt className="text-muted-foreground mb-1">Attestation ID</dt>
+            <dd className="font-mono text-xs text-foreground bg-muted p-2 rounded break-all">
+              {highlightedAttestation}
+            </dd>
+          </div>
+          <div className="flex justify-between items-center">
+            <dt className="text-muted-foreground">Result</dt>
+            <dd>
+              <Badge variant={attestation.data[3] ? "success" : "danger"}>
+                {attestation.data[3] ? "PASS" : "FAIL"}
+              </Badge>
+            </dd>
+          </div>
+          <div>
+            <dt className="text-muted-foreground mb-1">Subject DID (bytes32)</dt>
+            <dd className="font-mono text-xs text-foreground bg-muted p-2 rounded break-all">
+              {formatBytes32(attestation.data[1])}
+            </dd>
+          </div>
+        </dl>
+      )}
+    </Card>
   );
 }

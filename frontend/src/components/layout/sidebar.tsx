@@ -6,10 +6,8 @@ import { cn } from "@/lib/utils";
 
 const NAV_ITEMS = [
   { href: "/", label: "Dashboard" },
-  { href: "/verify", label: "Verify Credential" },
-  { href: "/did", label: "DID Explorer" },
-  { href: "/credentials", label: "Credential Explorer" },
-  { href: "/attestations", label: "Attestation Viewer" },
+  { href: "/verify", label: "Verify" },
+  { href: "/explorer", label: "Explorer" },
 ];
 
 export function Sidebar() {
@@ -31,7 +29,7 @@ export function Sidebar() {
 
       <nav className="flex-1 space-y-1 px-2 py-4">
         {NAV_ITEMS.map((item) => {
-          const active = pathname === item.href;
+          const active = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
           return (
             <Link
               key={item.href}

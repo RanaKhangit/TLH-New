@@ -16,6 +16,7 @@ export function useVerifyAttestation(
     args: attestationId ? [attestationId] : undefined,
     query: {
       enabled: !!attestationId,
+      staleTime: 30_000,
       refetchInterval: (query) => {
         // Poll every 4s until attestation appears on-chain, then stop
         const data = query.state.data as readonly [boolean, ...unknown[]] | undefined;
@@ -37,6 +38,7 @@ export function useTrustVerifyAttestation(
     chainId: privateChain.id,
     query: {
       enabled: !!attestationId,
+      staleTime: 30_000,
       refetchInterval: (query) => {
         const data = query.state.data as readonly [boolean, ...unknown[]] | undefined;
         return data?.[0] ? false : 4000;

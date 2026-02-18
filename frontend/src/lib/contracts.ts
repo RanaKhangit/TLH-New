@@ -18,6 +18,17 @@ export const CONTRACTS = {
     implementation:
       "0x2ae518d86774c814a73ca03464b355a3a228ac8d" as `0x${string}`,
   },
+  TLHCCIPReceiver: {
+    proxy: "0x234Aec51d3977bA5174B068d2Daf15e5367C0bF0" as `0x${string}`,
+    implementation:
+      "0x873A6c71eB179da1e6a53E4958435919CCb0940F" as `0x${string}`,
+  },
+  TLHCCIPSender: {
+    proxy: "0xB8238cA59c7479e16d888A86A533A3113886A260" as `0x${string}`,
+    implementation:
+      "0x30De5aDcD1Db72F93Ed4ceF92240b2A97D652969" as `0x${string}`,
+  },
+  CCIPRouter: "0x0BF3dE8c5D3e8A2B34D2BEeB17ABfCeBaf363A59" as `0x${string}`,
 } as const;
 
 /** Private trust chain contracts (Polygon Edge, chain ID 100100) */
