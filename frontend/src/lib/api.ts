@@ -36,6 +36,7 @@ export interface PipelineResult {
     result: string;
     txHash: string;
     proofId: string;
+    attestationId: string;
     verificationResult: string;
   };
 }
@@ -83,10 +84,15 @@ export async function fetchEAHealth(): Promise<boolean> {
   }
 }
 
-export async function triggerFullPipeline(): Promise<PipelineResult> {
+export async function triggerFullPipeline(
+  clinicianDID?: string
+): Promise<PipelineResult> {
   return fetchJSON<PipelineResult>(EA_API, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ id: `demo-${Date.now()}`, data: {} }),
+    body: JSON.stringify({
+      id: `demo-${Date.now()}`,
+      data: { clinicianDID: clinicianDID || "did:tlh:clinician-789" },
+    }),
   });
 }

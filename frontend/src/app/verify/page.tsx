@@ -69,7 +69,11 @@ export default function VerifyPage() {
     setPipelineError(null);
     setPipeline(null);
     try {
-      const result = await triggerFullPipeline();
+      // Pass the selected doctor's name as a DID so the on-chain
+      // attestation is linked to the specific clinician
+      const { surname, givenName } = DEMO_NAMES[selectedName];
+      const clinicianDID = `did:tlh:${givenName.toLowerCase()}-${surname.toLowerCase()}`;
+      const result = await triggerFullPipeline(clinicianDID);
       setPipeline(result);
     } catch (e) {
       setPipelineError(
@@ -270,6 +274,14 @@ export default function VerifyPage() {
                 {pipeline.data.proofId}
               </dd>
             </div>
+            {pipeline.data.attestationId && (
+              <div>
+                <dt className="text-muted-foreground mb-1">Attestation ID</dt>
+                <dd className="font-mono text-xs text-foreground bg-muted p-2 rounded break-all">
+                  {pipeline.data.attestationId}
+                </dd>
+              </div>
+            )}
             <div>
               <dt className="text-muted-foreground mb-1">Transaction</dt>
               <dd>

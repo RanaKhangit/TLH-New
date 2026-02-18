@@ -44,6 +44,16 @@
       "implDeployTx": "0x0c98d44b7c9ffc3b4e4d3a607333751799b92b749bba697d258cf331a429fa14",
       "proxyDeployTx": "0x6f320f87bd26e085013d9b815c38e0bae4c9f2d93409e698b9a58e1cdce39d24",
       "blockNumber": 10260089
+    },
+    "TLHCCIPReceiver": {
+      "implementation": "0x873A6c71eB179da1e6a53E4958435919CCb0940F",
+      "proxy": "0x234Aec51d3977bA5174B068d2Daf15e5367C0bF0",
+      "ccipRouter": "0x0BF3dE8c5D3e8A2B34D2BEeB17ABfCeBaf363A59"
+    },
+    "TLHCCIPSender": {
+      "implementation": "0x30De5aDcD1Db72F93Ed4ceF92240b2A97D652969",
+      "proxy": "0xB8238cA59c7479e16d888A86A533A3113886A260",
+      "ccipRouter": "0x0BF3dE8c5D3e8A2B34D2BEeB17ABfCeBaf363A59"
     }
   }
 }
