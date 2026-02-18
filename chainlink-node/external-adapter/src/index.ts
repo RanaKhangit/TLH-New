@@ -195,10 +195,18 @@ app.post("/", async (req, res) => {
   console.log(`[EA] Received request: jobRunID=${jobRunID}`)
 
   try {
-    // Step 1: Call prover-api to verify DECO attestation
-    console.log(`[EA] Calling prover-api at ${PROVER_API_URL}/deco/verify`)
+    // Step 1: Call prover-api to verify DECO attestation for the specific doctor
+    const surname = request.data?.surname as string | undefined
+    const givenName = request.data?.givenName as string | undefined
 
-    const verifyResponse = await fetch(`${PROVER_API_URL}/deco/verify`)
+    let verifyUrl = `${PROVER_API_URL}/deco/verify`
+    if (surname && givenName) {
+      const params = new URLSearchParams({ surname, givenName })
+      verifyUrl = `${verifyUrl}?${params}`
+    }
+    console.log(`[EA] Calling prover-api at ${verifyUrl}`)
+
+    const verifyResponse = await fetch(verifyUrl)
     if (!verifyResponse.ok) {
       throw new Error(`Prover API returned ${verifyResponse.status}`)
     }

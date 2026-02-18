@@ -19,6 +19,11 @@ const REPO_ROOT = path.join(process.cwd(), "..")
 const ATTESTATION_PATH = path.join(REPO_ROOT, "json-encoded-attestation.json")
 const DECODED_DATA_PATH = path.join(REPO_ROOT, "decoded-attested-data.json")
 
+// Deterministic prover keypair for DECO attestation generation.
+// In production this would be the TLSNotary's signing key.
+const PROVER_PRIV_HEX = keccak256(toHex("TLH_DECO_PROVER_V1")).slice(2)
+const PROVER_PUB_UNCOMPRESSED = secp256k1.getPublicKey(PROVER_PRIV_HEX, false)
+
 type Store = {
   doctors: Record<
     string,
@@ -127,6 +132,86 @@ function loadDecoAttestation(): { attestation: DecoAttestation; decodedData: Dec
   }
 }
 
+/**
+ * Generate a fresh DECO-style attestation for a specific doctor.
+ * In production, TLSNotary generates and signs the notarized TLS transcript.
+ * This simulates that flow: fetch GMC data → build attestation → sign → verify.
+ */
+function generateDecoAttestation(gmcRecord: {
+  gmcRefNo: string; surname: string; givenName: string;
+  registrationStatus: string; revalidationStatus: string;
+  qualification: string; yearOfQualification: string;
+  placeOfQualification: string; designatedBody: string;
+}): { attestation: DecoAttestation; decodedData: DecoAttestedData } {
+  const isRegistered = gmcRecord.registrationStatus.includes("Licence")
+
+  const decodedData: DecoAttestedData = {
+    success: [isRegistered, true], // [registration predicate, data integrity]
+    proof_specs: [{
+      client: {
+        method: "GET",
+        url: `/gmc/lookup?surname=${encodeURIComponent(gmcRecord.surname)}&givenName=${encodeURIComponent(gmcRecord.givenName)}`,
+      },
+      server: {
+        method: "verify-json-response",
+        predicate: "body.registrationStatus == 'Registered with Licence'",
+      },
+      tls_version: "v1.3",
+    }],
+    public_outputs: [gmcRecord.gmcRefNo, gmcRecord.registrationStatus],
+    data_retrieval_time: new Date().toISOString(),
+  }
+
+  // Encode to hex (matching TLSNotary attestation format)
+  const dataJson = JSON.stringify(decodedData)
+  const dataHex = `0x${Buffer.from(dataJson, "utf8").toString("hex")}` as `0x${string}`
+
+  // Sign: keccak256(data_hex) → secp256k1.sign
+  const messageHash = keccak256(dataHex)
+  const msgHashBytes = hexToBytes(messageHash)
+  const sig = secp256k1.sign(msgHashBytes, PROVER_PRIV_HEX)
+  const sigCompact = sig.toCompactHex()
+  const recovery = (sig.recovery ?? 0).toString(16).padStart(2, "0")
+  const signatureHex = `0x${sigCompact}${recovery}`
+
+  const pubKeyHex = `0x${Buffer.from(PROVER_PUB_UNCOMPRESSED).toString("hex")}`
+
+  return {
+    attestation: {
+      signature_scheme: "ecdsa_secp256k1_keccak256",
+      attestation_scheme: "json",
+      data_hex: dataHex,
+      signature_hex: signatureHex,
+      public_key_hex: pubKeyHex,
+    },
+    decodedData,
+  }
+}
+
+/**
+ * Look up a doctor from GMC CSV data and return structured result.
+ */
+function lookupDoctor(surname: string, givenName: string) {
+  const records = loadGMCData()
+  const match = records.find(
+    (r) =>
+      r.Surname.toLowerCase() === surname.toLowerCase() &&
+      r["Given Name"].toLowerCase() === givenName.toLowerCase()
+  )
+  if (!match) return null
+  return {
+    gmcRefNo: match["GMC Ref No"],
+    surname: match.Surname,
+    givenName: match["Given Name"],
+    registrationStatus: match["Registration Status"],
+    revalidationStatus: match["Revalidation Status"],
+    qualification: match.Qualification,
+    yearOfQualification: match["Year Of Qualification"],
+    placeOfQualification: match["Place of Qualification"],
+    designatedBody: match["Designated Body"],
+  }
+}
+
 const app = express()
 app.use((_req, res, next) => {
   res.header("Access-Control-Allow-Origin", "*")
@@ -161,7 +246,19 @@ const IngestSchema = z.object({
  * GET /deco/attestation
  * Returns the raw DECO attestation for the Chainlink node to fetch
  */
-app.get("/deco/attestation", (_req, res) => {
+app.get("/deco/attestation", (req, res) => {
+  const surname = req.query.surname as string | undefined
+  const givenName = req.query.givenName as string | undefined
+
+  if (surname && givenName) {
+    const doctor = lookupDoctor(surname, givenName)
+    if (!doctor) {
+      return res.status(404).json({ error: `Doctor not found: ${givenName} ${surname}` })
+    }
+    const { attestation } = generateDecoAttestation(doctor)
+    return res.json(attestation)
+  }
+
   const data = loadDecoAttestation()
   if (!data) {
     return res.status(404).json({ error: "No DECO attestation files found" })
@@ -174,65 +271,86 @@ app.get("/deco/attestation", (_req, res) => {
  * Verifies the DECO attestation and returns PASS/FAIL result
  * This is the main endpoint the Chainlink node will call
  */
-app.get("/deco/verify", (_req, res) => {
-  console.log("[DECO] Verification request received")
+app.get("/deco/verify", (req, res) => {
+  const surname = req.query.surname as string | undefined
+  const givenName = req.query.givenName as string | undefined
 
-  const data = loadDecoAttestation()
-  if (!data) {
-    console.log("[DECO] No attestation files found")
-    return res.json({
-      result: "FAIL",
-      reason: "No attestation files found",
-      inquiryId: "",
-      timestamp: new Date().toISOString(),
-    })
+  console.log(`[DECO] Verification request${surname ? ` for ${givenName} ${surname}` : " (static fallback)"}`)
+
+  let attestation: DecoAttestation
+  let decodedData: DecoAttestedData
+
+  if (surname && givenName) {
+    // Dynamic mode: look up doctor in GMC register, generate fresh attestation
+    const doctor = lookupDoctor(surname, givenName)
+    if (!doctor) {
+      console.log(`[DECO] Doctor not found: ${givenName} ${surname}`)
+      return res.json({
+        result: "FAIL",
+        reason: `Doctor not found in GMC register: ${givenName} ${surname}`,
+        timestamp: new Date().toISOString(),
+      })
+    }
+    console.log(`[DECO] GMC record: ${doctor.givenName} ${doctor.surname} — ${doctor.registrationStatus}`)
+    const generated = generateDecoAttestation(doctor)
+    attestation = generated.attestation
+    decodedData = generated.decodedData
+  } else {
+    // Static fallback: read pre-computed attestation files
+    const data = loadDecoAttestation()
+    if (!data) {
+      console.log("[DECO] No attestation files found")
+      return res.json({
+        result: "FAIL",
+        reason: "No attestation files found",
+        timestamp: new Date().toISOString(),
+      })
+    }
+    attestation = data.attestation
+    decodedData = data.decodedData
   }
 
-  const { attestation, decodedData } = data
-
-  // Step 1: Verify signature
+  // Step 1: Verify ECDSA signature (same path for dynamic and static)
   const signatureValid = verifyDecoSignature(attestation)
   console.log(`[DECO] Signature verification: ${signatureValid ? "PASS" : "FAIL"}`)
 
   if (!signatureValid) {
     return res.json({
       result: "FAIL",
-      reason: "Invalid signature",
-      inquiryId: "",
+      reason: "Invalid ECDSA signature on attestation",
       timestamp: new Date().toISOString(),
     })
   }
 
   // Step 2: Check all predicates passed
   const predicatesPassed = decodedData.success.every((s) => s === true)
-  console.log(`[DECO] Predicates check: ${predicatesPassed ? "PASS" : "FAIL"} (${decodedData.success.join(", ")})`)
+  console.log(`[DECO] Predicates: ${predicatesPassed ? "PASS" : "FAIL"} (${decodedData.success.join(", ")})`)
 
   if (!predicatesPassed) {
     return res.json({
       result: "FAIL",
-      reason: "Predicates failed",
-      inquiryId: "",
+      reason: "Registration predicate failed — doctor not registered with licence",
+      gmcRefNo: decodedData.public_outputs[0] || "",
+      registrationStatus: decodedData.public_outputs[1] || "",
       timestamp: new Date().toISOString(),
     })
   }
 
-  // Step 3: Extract inquiry ID from the URL in the attestation
-  // The URL contains $[[your_inquiry_id]] placeholder, but we can get it from public_outputs
-  const verificationType = decodedData.public_outputs[0] || ""
-  const completedAt = decodedData.public_outputs[1] || ""
+  // Step 3: Build response with proof details
+  const proofId = attestation.signature_hex.slice(2, 20)
 
-  // Generate a proof ID from the attestation signature
-  const proofId = attestation.signature_hex.slice(0, 18) // First 8 bytes of signature
-
-  console.log(`[DECO] Verification PASSED - Type: ${verificationType}, Completed: ${completedAt}`)
+  console.log(`[DECO] Verification PASSED — proofId=${proofId}`)
 
   return res.json({
     result: "PASS",
-    reason: "All checks passed",
-    proofId: proofId,
-    verificationType: verificationType,
-    completedAt: completedAt,
+    reason: "Signature valid, registration predicate satisfied",
+    proofId,
+    verificationType: "GMC_REGISTRATION",
+    completedAt: decodedData.data_retrieval_time,
     dataRetrievalTime: decodedData.data_retrieval_time,
+    gmcRefNo: decodedData.public_outputs[0] || "",
+    registrationStatus: decodedData.public_outputs[1] || "",
+    attestation,
     timestamp: new Date().toISOString(),
   })
 })

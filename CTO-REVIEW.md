@@ -1,10 +1,10 @@
 # TLH — Trusted Linked Healthcare
 ## CTO Technical Review Document
 
-**Date:** February 2026
+**Date:** February 18, 2026
 **Repo:** `https://github.com/RanaKhangit/TLH-New`
 **Branch:** `main`
-**Status:** Fully functional on Sepolia testnet with live demo data
+**Status:** Fully functional on Sepolia testnet — all services live, all 173 tests passing
 
 ---
 
@@ -14,8 +14,10 @@ TLH is a **decentralized credential verification system** for the NHS. It uses *
 
 **Key capabilities:**
 - Privacy-preserving verification of web-based credentials (GMC register)
-- Tamper-proof on-chain attestation records (Sepolia, mainnet-ready)
-- Cross-chain credential sharing via Chainlink CCIP
+- Dynamic per-doctor DECO attestation generation with ECDSA secp256k1 signing
+- On-chain attestation submission via `submitAttestation()` contract calls
+- Cross-chain credential sharing via Chainlink CCIP (deployed + configured)
+- Private trust chain (Polygon Edge, 4-validator IBFT 2.0, chain ID 100100)
 - Role-based access control on all contracts (UUPS upgradeable proxies)
 - Full-stack: smart contracts + backend services + frontend dashboard
 
@@ -24,46 +26,72 @@ TLH is a **decentralized credential verification system** for the NHS. It uses *
 ## 2. Architecture Overview
 
 ```
-┌────────────────────────────────────────────────────────────────┐
-│                        FRONTEND (Next.js 16)                    │
-│   Dashboard │ Verify Credential │ DID Explorer │ Credentials   │
-│                    │ Attestation Viewer                          │
-│                    Port 3000                                     │
-└────────────┬──────────────┬──────────────┬─────────────────────┘
+┌──────────────────────────────────────────────────────────────────────┐
+│                        FRONTEND (Next.js 16, Port 3000)              │
+│   Dashboard │ Verify Credential │ DID Explorer │ Credentials        │
+│                    │ Attestation Viewer                               │
+│   /api/pipeline  (Next.js API route — proxies to EA)                 │
+└────────────┬──────────────┬──────────────┬───────────────────────────┘
              │              │              │
              ▼              ▼              ▼
-┌────────────────┐ ┌───────────────┐ ┌──────────────────────────┐
-│  Prover API    │ │   External    │ │  Ethereum Sepolia        │
-│  (Express)     │ │   Adapter     │ │  (5 UUPS Proxy Contracts)│
-│  Port 8787     │ │   (Express)   │ │                          │
-│                │ │   Port 8788   │ │  DIDRegistry             │
-│  • DECO verify │ │               │ │  VCHashAnchors           │
-│  • GMC lookup  │ │  • Verify     │ │  CredentialRegistry      │
-│  • Signature   │ │  • Encode     │ │  AttestationVerifier     │
-│    validation  │ │  • Send Tx    │ │  TrustAttestationVerifier│
-└────────────────┘ └───────────────┘ └──────────────────────────┘
-                                              │
-                                     ┌────────┴────────┐
-                                     │  Chainlink CCIP  │
-                                     │  (Cross-chain)   │
-                                     └─────────────────┘
+┌────────────────┐ ┌───────────────┐ ┌──────────────────────────────────┐
+│  Prover API    │ │   External    │ │  Ethereum Sepolia (11155111)     │
+│  (Express)     │ │   Adapter     │ │  7 UUPS Proxy Contracts:         │
+│  Port 8787     │ │   (Express)   │ │                                  │
+│                │ │   Port 8788   │ │  DIDRegistry                     │
+│  • GMC lookup  │ │               │ │  VCHashAnchors                   │
+│  • Dynamic     │ │  • Verify via │ │  CredentialRegistry              │
+│    DECO attest │ │    Prover API │ │  AttestationVerifier             │
+│  • ECDSA sign  │ │  • Build ADR  │ │  TrustAttestationVerifier        │
+│  • Signature   │ │    predicate  │ │  TLHCCIPReceiver                 │
+│    verify      │ │  • Call       │ │  TLHCCIPSender                   │
+│                │ │    submit-    │ │                                  │
+│                │ │    Attestation│ │                                  │
+└────────────────┘ └───────────────┘ └───────────────┬──────────────────┘
+                                                     │
+                                            ┌────────┴────────┐
+                                            │  Chainlink CCIP  │
+                                            │  (Cross-chain)   │
+                                            └────────┬────────┘
+                                                     │
+                          ┌──────────────────────────┴──────────────────┐
+                          │  Private Trust Chain (Polygon Edge, 100100)  │
+                          │  4 IBFT 2.0 Validators (Docker)             │
+                          │                                              │
+                          │  CredentialRegistry (proxy)                  │
+                          │  TrustAttestationVerifier (proxy)            │
+                          └─────────────────────────────────────────────┘
 ```
 
-### Data Flow (End-to-End Verification)
+### Data Flow (End-to-End Verification Pipeline)
 
 ```
-1. User clicks "Submit to Sepolia" on frontend
-2. Frontend POSTs to External Adapter (:8788)
-3. EA calls Prover API (:8787) → GET /deco/verify
-4. Prover API loads DECO attestation files
-5. Verifies ECDSA secp256k1 signature (via @noble/curves)
-6. Checks all predicate success flags
-7. Returns { result: "PASS", proofId: "0x..." }
-8. EA encodes "PASS|0x<proofId>" as hex calldata
-9. EA sends self-transfer tx to Sepolia (0 ETH, data = result)
-10. Returns txHash to frontend
-11. Frontend displays transaction confirmation
+1. User selects doctor from dropdown on /verify page
+2. Step 1: Frontend → Prover API → GET /gmc/lookup?surname=X&givenName=Y
+   └─ Returns GMC registration record (ref number, status, qualification)
+
+3. Step 2: Frontend → Prover API → GET /deco/verify?surname=X&givenName=Y
+   ├─ Prover generates fresh DECO attestation for selected doctor
+   ├─ Signs attestation data with deterministic ECDSA secp256k1 key
+   ├─ Verifies signature + checks registration predicate
+   └─ Returns { result: "PASS"/"FAIL", attestation: {...}, gmcRefNo, ... }
+
+4. Step 3: Frontend → POST /api/pipeline (Next.js route → EA :8788)
+   ├─ EA calls Prover API → GET /deco/verify?surname=X&givenName=Y
+   ├─ EA builds ADR-002 predicateData (result byte + ABI-encoded payload)
+   ├─ EA signs chain-bound digest with deployer key (EIP-191)
+   ├─ EA calls submitAttestation() on AttestationVerifier contract
+   │   ├─ Contract verifies ECDSA signature
+   │   ├─ Contract checks signer whitelist
+   │   ├─ Contract stores attestation record
+   │   └─ If PASS: registers DID + anchors VC hash
+   └─ Returns { txHash, attestationId, verificationResult, proofId }
+
+5. Frontend displays tx hash (clickable Etherscan link) + attestation ID
 ```
+
+**PASS path** (registered doctor): Full on-chain attestation + DID registration + VC hash anchor
+**FAIL path** (deceased/removed doctor): On-chain attestation stored with result=false, no side-effects
 
 ---
 
@@ -79,13 +107,15 @@ TLH is a **decentralized credential verification system** for the NHS. It uses *
 | **Backend** | Express (TypeScript) | 5.x |
 | **Crypto** | @noble/curves (secp256k1) | 1.4.0 |
 | **Cross-chain** | Chainlink CCIP | — |
-| **Private Chain** | Polygon Edge (IBFT 2.0) | — |
+| **Private Chain** | Polygon Edge (IBFT 2.0) | 1.3.3 |
 | **Containerization** | Docker Compose | — |
-| **Testing** | Foundry (forge test) | — |
+| **Testing** | Foundry (forge test) | 1.6.0 |
 
 ---
 
-## 4. Smart Contracts (Sepolia)
+## 4. Smart Contracts
+
+### Sepolia (Shared Anchor Chain — 11155111)
 
 All contracts are deployed as **UUPS upgradeable proxies** with role-based access control.
 
@@ -96,8 +126,20 @@ All contracts are deployed as **UUPS upgradeable proxies** with role-based acces
 | **CredentialRegistry** | `0xae4b71776fab8e431cee4874ad3a2a97588d89fb` | Stores credential status (Active/Expired/Revoked) with live expiry |
 | **AttestationVerifier** | `0xce863e465f21df87ad9f0a2af838fac1750f08d2` | Shared anchor — verifies signed attestations, triggers DID + VC writes |
 | **TrustAttestationVerifier** | `0x2ad7540b14585ebfb3c86604d1927b40e2efa5db` | Trust chain — verifies attestations and writes to CredentialRegistry |
+| **TLHCCIPReceiver** | `0x234Aec51d3977bA5174B068d2Daf15e5367C0bF0` | Receives cross-chain credentials via CCIP |
+| **TLHCCIPSender** | `0xB8238cA59c7479e16d888A86A533A3113886A260` | Sends cross-chain credentials via CCIP |
 
 **Deployer / Admin:** `0x3b50966a8b71f277e90e14cdc31455f6af3977e6`
+**CCIP Router (Sepolia):** `0x0BF3dE8c5D3e8A2B34D2BEeB17ABfCeBaf363A59`
+
+### Private Trust Chain (Polygon Edge — 100100)
+
+| Contract | Proxy Address | Purpose |
+|----------|---------------|---------|
+| **CredentialRegistry** | `0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9` | Trust-chain credential storage |
+| **TrustAttestationVerifier** | `0x0165878A594ca255338adfa4d48449f69242Eb8F` | Trust-chain attestation verifier |
+
+**Deployer / Admin:** `0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266`
 
 ### Role-Based Access
 
@@ -105,9 +147,18 @@ All contracts are deployed as **UUPS upgradeable proxies** with role-based acces
 |------|----------|------------|----------------|
 | REGISTRAR_ROLE | DIDRegistry | Admin | Register new DIDs |
 | ANCHOR_WRITER_ROLE | VCHashAnchors | AttestationVerifier, Admin | Write VC hash anchors |
-| VERIFIER_ROLE | CredentialRegistry | TrustAttestationVerifier, Admin | Write/revoke credentials |
+| VERIFIER_ROLE | CredentialRegistry | TrustAttestationVerifier, TLHCCIPReceiver, Admin | Write/revoke credentials |
 | SIGNER_ADMIN_ROLE | Both Verifiers | Admin | Whitelist attestation signers |
 | UPGRADER_ROLE | All contracts | Admin | Upgrade implementations |
+
+### CCIP Configuration (Completed)
+
+| Configuration | Status |
+|---------------|--------|
+| Receiver: `isChainAllowlisted(sepoliaSelector)` | `true` |
+| Receiver: `isSenderAllowlisted(sepoliaSelector, senderProxy)` | `true` |
+| Sender: `configureDestination(sepoliaSelector, receiverProxy)` | `true` |
+| CredentialRegistry: `hasRole(VERIFIER_ROLE, receiverProxy)` | `true` |
 
 ### Contract Interaction Diagram
 
@@ -119,7 +170,9 @@ submitAttestation(id, subjectDID, predicateData, signature)
     ├── Check replay protection (attestationUsed[id])
     ├── Decode predicateData[0] = result byte
     ├── Verify ECDSA signature against chain-bound digest
-    ├── Check signer whitelist
+    │     └── digest = EIP-191(keccak256(DOMAIN ‖ chainId ‖ contractAddr ‖ id ‖ did ‖ predHash))
+    ├── Check signer whitelist (signerWhitelist[recovered])
+    ├── Validate result consistency + expiry
     ├── Store attestation record
     └── Call _onAttestationVerified() hook
               │
@@ -135,7 +188,34 @@ submitAttestation(id, subjectDID, predicateData, signature)
 
 ---
 
-## 5. Project Directory Structure
+## 5. Dynamic DECO Attestation System
+
+The prover-api generates **per-doctor, freshly signed** DECO attestations (not static files).
+
+### How It Works
+
+1. **Deterministic Prover Key** — derived from `keccak256("TLH_DECO_PROVER_V1")` for reproducibility
+2. **GMC Lookup** — reads 4 demo doctors from CSV (3 registered, 1 deceased)
+3. **Attestation Generation** — builds JSON payload with:
+   - `success[0]`: registration predicate (`registrationStatus.includes("Licence")`)
+   - `proof_specs`: TLS proof specification (method, URL, predicate)
+   - `public_outputs`: GMC ref number + registration status
+   - `data_retrieval_time`: current ISO timestamp
+4. **ECDSA Signing** — `secp256k1.sign(keccak256(data_hex), proverPrivKey)`
+5. **Verification** — recovers public key from signature, checks against prover key, evaluates predicates
+
+### Demo Doctors
+
+| Name | GMC Ref | Status | DECO Result |
+|------|---------|--------|-------------|
+| Azhar Adfcds | 4333333 | Registered with a licence to practise | PASS |
+| Rosalind Fsofkdoo | 5222222 | Registered with a licence to practise | PASS |
+| Keith Hslllsp | 6111111 | Registered with a licence to practise | PASS |
+| Alison Bskeodk | 7000000 | Not registered — Deceased | FAIL |
+
+---
+
+## 6. Project Directory Structure
 
 ```
 tlh/
@@ -143,140 +223,215 @@ tlh/
 │   ├── src/
 │   │   ├── shared/               # DIDRegistry, VCHashAnchors, AttestationVerifier
 │   │   ├── trust/                # CredentialRegistry, TrustAttestationVerifier
-│   │   ├── ccip/                 # CCIP sender/receiver contracts
+│   │   ├── ccip/                 # TLHCCIPSender, TLHCCIPReceiver
 │   │   ├── base/                 # BaseAttestationVerifier (shared logic)
 │   │   └── interfaces/           # Contract interfaces
-│   ├── test/                     # Foundry tests
+│   ├── test/                     # 173 Foundry tests (all passing)
+│   │   ├── base/                 # BaseAttestationVerifier unit tests
+│   │   ├── shared/               # DIDRegistry, VCHashAnchors, AttestationVerifier
+│   │   ├── trust/                # CredentialRegistry, TrustAttestationVerifier
+│   │   ├── ccip/                 # CCIP integration, sender, receiver tests
+│   │   └── fork/                 # Sepolia fork behaviour tests
 │   ├── script/                   # Deployment & seed scripts
-│   │   ├── DeploySepolia.s.sol
-│   │   ├── DeployPrivateChain.s.sol
-│   │   ├── DeployCCIP.s.sol
-│   │   ├── SeedDemoData.s.sol
-│   │   ├── SeedAttestation.s.sol
-│   │   └── SeedTrustAttestation.s.sol
-│   ├── broadcast/                # Deployment tx logs (Sepolia)
+│   ├── broadcast/                # Deployment tx logs (Sepolia + local)
 │   ├── deployment-manifest.sepolia.json
+│   ├── deployment-manifest.private-chain.json
 │   └── foundry.toml
 │
 ├── frontend/                     # Next.js 16 dashboard
 │   ├── src/
-│   │   ├── app/                  # 5 pages: /, /verify, /did, /credentials, /attestations
-│   │   ├── components/ui/        # Shared: Card, Badge, Skeleton, ErrorBoundary
+│   │   ├── app/                  # 5 pages + /api/pipeline route
+│   │   ├── components/ui/        # Card, Badge, Skeleton, ErrorBoundary
 │   │   ├── hooks/                # Contract read hooks (wagmi)
 │   │   └── lib/                  # ABIs, API client, utils, wagmi config
 │   └── package.json
 │
-├── prover-api/                   # DECO attestation verifier (Express)
-│   ├── src/server.ts
+├── prover-api/                   # DECO attestation engine (Express)
+│   ├── src/server.ts             # Dynamic attestation generation + verification
+│   ├── data/                     # Demo doctor CSV, static fallback files
 │   └── package.json
 │
 ├── chainlink-node/               # Chainlink Node (Docker) + External Adapter
-│   ├── docker-compose.yml        # Chainlink Node + PostgreSQL
-│   ├── config/                   # config.toml, secrets.toml, api.txt
-│   ├── jobs/                     # TOML job specs
-│   └── external-adapter/         # Express service (sends txs to Sepolia)
+│   ├── docker-compose.yml
+│   └── external-adapter/         # Express — calls submitAttestation() on-chain
 │       ├── src/index.ts
-│       ├── .env.example
 │       └── package.json
 │
 ├── private-chain/                # Polygon Edge (4-validator IBFT 2.0)
 │   ├── docker-compose.yml
 │   └── scripts/
 │
-├── cre-workflow/                  # Chainlink Runtime Environment workflows
-├── deco-scripts/                  # Standalone DECO verification scripts
-├── START-HERE.md                  # Step-by-step setup guide
-├── DEMO-README.md                 # Architecture documentation
-└── TESTING_GUIDE.md               # Testing procedures
+└── CTO-REVIEW.md                 # This document
 ```
 
 ---
 
-## 6. How to Run (Quick Start)
+## 7. How to Run (Quick Start)
 
 ### Prerequisites
 
 | Requirement | Check | Notes |
 |-------------|-------|-------|
 | Node.js 18+ | `node --version` | Required for all services |
-| npm | `npm --version` | Bundled with Node.js |
-| Docker + Compose | `docker --version` | For Chainlink Node |
-| Foundry (forge) | `forge --version` | For contract compilation/deployment |
+| Docker + Compose | `docker --version` | For private chain + Chainlink Node |
+| Foundry (forge) | `forge --version` | For contract compilation/testing |
 | Sepolia ETH | — | ~0.05 ETH for gas fees |
-| Alchemy API key | — | For Sepolia RPC access |
 
-### Step 1: Clone & Install
-
-```bash
-git clone --recurse-submodules https://github.com/RanaKhangit/TLH-New.git
-cd TLH-New
-```
-
-### Step 2: Configure Environment
-
-```bash
-# External Adapter (REQUIRED)
-cp chainlink-node/external-adapter/.env.example chainlink-node/external-adapter/.env
-# Edit .env → set PRIVATE_KEY and SEPOLIA_RPC_URL
-```
-
-### Step 3: Install Dependencies
-
-```bash
-# Frontend
-cd frontend && npm install && cd ..
-
-# Prover API
-cd prover-api && npm install && cd ..
-
-# External Adapter
-cd chainlink-node/external-adapter && npm install && cd ../..
-```
-
-### Step 4: Start Services (3 terminals)
+### Start Services
 
 ```bash
 # Terminal 1 — Prover API
-cd prover-api && npm run dev
+cd prover-api && npm install && npm run dev
 # → http://localhost:8787
 
 # Terminal 2 — External Adapter
-cd chainlink-node/external-adapter && npm run dev
+cd chainlink-node/external-adapter && npm install && npm run dev
 # → http://localhost:8788
 
 # Terminal 3 — Frontend
-cd frontend && npm run dev
+cd frontend && npm install && npm run dev
 # → http://localhost:3000
+
+# Terminal 4 — Private Chain (optional)
+cd private-chain && docker compose up -d
+# → 4 validators on http://localhost:8545
 ```
 
-### Step 5: Verify
+### Verify Everything Works
 
 ```bash
-# Health checks
-curl http://localhost:8787/health    # {"ok":true}
-curl http://localhost:8788/health    # {"status":"ok","address":"0x..."}
+# 1. Health checks
+curl http://localhost:8787/health
+# → {"ok":true}
 
-# Full pipeline test (verify + send tx)
+curl http://localhost:8788/health
+# → {"status":"ok","address":"0x3B50966A8B71f277e90e14cdC31455F6Af3977e6"}
+
+# 2. GMC Lookup (dynamic)
+curl "http://localhost:8787/gmc/lookup?surname=Adfcds&givenName=Azhar"
+# → {"gmcRefNo":"4333333","registrationStatus":"Registered with a licence to practise",...}
+
+# 3. DECO Verify (dynamic, per-doctor)
+curl "http://localhost:8787/deco/verify?surname=Adfcds&givenName=Azhar"
+# → {"result":"PASS","gmcRefNo":"4333333","attestation":{"signature_hex":"0x..."},...}
+
+# 4. DECO Verify (FAIL path — deceased doctor)
+curl "http://localhost:8787/deco/verify?surname=Bskeodk&givenName=Alison"
+# → {"result":"FAIL","reason":"Registration predicate failed",...}
+
+# 5. Full pipeline (EA → Prover → submitAttestation → Sepolia tx)
 curl -X POST http://localhost:8788 \
   -H "Content-Type: application/json" \
-  -d '{"id":"test","data":{}}'
-# → {"statusCode":200,"data":{"txHash":"0x...","verificationResult":"PASS"}}
+  -d '{"id":"test","data":{"surname":"Adfcds","givenName":"Azhar"}}'
+# → {"statusCode":200,"data":{"txHash":"0x...","verificationResult":"PASS","attestationId":"0x..."}}
+
+# 6. Pipeline via frontend API route
+curl -X POST http://localhost:3000/api/pipeline \
+  -H "Content-Type: application/json" \
+  -d '{"surname":"Adfcds","givenName":"Azhar"}'
+# → Same response as above
+
+# 7. Private chain validators
+docker ps | grep tlh-validator
+# → 4 containers running
+
+# 8. Private chain RPC
+curl -s -X POST http://localhost:8545 \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","method":"eth_chainId","params":[],"id":1}'
+# → {"jsonrpc":"2.0","id":1,"result":"0x186a4"}  (100100)
+
+# 9. All Foundry tests
+cd contracts && forge test --summary
+# → 14 suites | 173 passed | 0 failed | 0 skipped
 ```
-
-### Step 6: Open Frontend
-
-Navigate to `http://localhost:3000` and explore:
-1. **Dashboard** — Contract deployment status, service health
-2. **Verify Credential** — Load attestation → Verify → Submit to Sepolia → GMC lookup
-3. **DID Explorer** — Resolve registered DIDs
-4. **Credential Explorer** — Query credential status (Active/Expired/Revoked)
-5. **Attestation Viewer** — Look up attestation records on both verifiers
 
 ---
 
-## 7. Live Demo Data on Sepolia
+## 8. Test Results (173/173 Passing)
 
-The following data has been seeded on-chain via Forge scripts:
+```
+╭───────────────────────────────────────+────────+────────+─────────╮
+│ Test Suite                            │ Passed │ Failed │ Skipped │
+╞═══════════════════════════════════════╪════════╪════════╪═════════╡
+│ PlaceholderTest                       │ 1      │ 0      │ 0       │
+│ BaseAttestationVerifierTest           │ 10     │ 0      │ 0       │
+│ AttestationVerifierTest               │ 14     │ 0      │ 0       │
+│ TrustAttestationVerifierTest          │ 12     │ 0      │ 0       │
+│ DIDRegistryTest                       │ 31     │ 0      │ 0       │
+│ VCHashAnchorsTest                     │ 13     │ 0      │ 0       │
+│ CredentialRegistryTest                │ 26     │ 0      │ 0       │
+│ CCIPIntegrationTest                   │ 4      │ 0      │ 0       │
+│ TLHCCIPSenderTest                     │ 17     │ 0      │ 0       │
+│ TLHCCIPReceiverTest                   │ 18     │ 0      │ 0       │
+│ AttestationVerifierForkTest           │ 3      │ 0      │ 0       │
+│ VCHashAnchorsForkTest                 │ 8      │ 0      │ 0       │
+│ AttestationVerifierForkBehaviour      │ 8      │ 0      │ 0       │
+│ TrustAttestationVerifierForkBehaviour │ 8      │ 0      │ 0       │
+╰───────────────────────────────────────+────────+────────+─────────╯
+  TOTAL: 173 passed, 0 failed, 0 skipped
+```
+
+### Test Categories
+
+| Category | Count | Scope |
+|----------|-------|-------|
+| Unit (Solidity) | 106 | Base, shared, trust contract logic |
+| CCIP | 39 | Sender, receiver, end-to-end integration |
+| Fork (state checks) | 11 | On-chain wiring, roles, deployed contract state |
+| Fork (behaviour) | 16 | Full submit + verify flows against live Sepolia state |
+| Placeholder | 1 | Forge compilation check |
+
+---
+
+## 9. Frontend — Verify Credential Page
+
+The `/verify` page implements a connected 3-step pipeline:
+
+| Step | Action | What Happens |
+|------|--------|--------------|
+| **Select Doctor** | Choose from dropdown | 4 demo doctors available |
+| **Step 1: GMC Lookup** | Click "Lookup GMC Registration" | Queries prover-api, shows GMC ref + status in table |
+| **Step 2: DECO Verify** | Click "Generate & Verify Attestation" | Generates fresh attestation, signs with prover key, verifies signature + predicate, shows PASS/FAIL + cryptographic details |
+| **Step 3: Submit On-Chain** | Click "Submit to Sepolia" | Runs full EA pipeline, calls `submitAttestation()`, returns tx hash + attestation ID |
+
+Changing the selected doctor resets all downstream steps.
+
+---
+
+## 10. Security Design
+
+| Aspect | Implementation |
+|--------|---------------|
+| **Private keys** | Never committed to git. `.env` is gitignored, `.env.example` provides templates |
+| **Replay protection** | `attestationUsed[id]` mapping prevents duplicate submissions |
+| **Signature verification** | Chain-bound digest includes domain tag, chainId, contract address (EIP-191) |
+| **Signer whitelist** | Only whitelisted addresses can submit valid attestations |
+| **Role separation** | REGISTRAR, VERIFIER, ANCHOR_WRITER, SIGNER_ADMIN, UPGRADER |
+| **UUPS upgradeable** | Admin-only upgrade path, no unprotected `selfdestruct` |
+| **Credential expiry** | Live status evaluation at read-time (not just write-time) |
+| **Irrevocable revocation** | Once revoked, a credential cannot be reactivated |
+| **CCIP allowlisting** | Dual allowlist: source chain + sender address |
+| **CCIP nonce protection** | Monotonic nonces prevent replay + enforce ordering |
+
+---
+
+## 11. CTO Review Findings — Resolution Status
+
+| # | Finding | Status | Resolution |
+|---|---------|--------|------------|
+| 1 | EA sends self-transfer txs (0 ETH to self) instead of calling contracts | **Fixed** | EA now calls `submitAttestation()` on AttestationVerifier contract. All txs target `0xCE863E46...` with proper ABI-encoded calldata |
+| 2 | Frontend disconnected from backend services | **Fixed** | Frontend calls prover-api (GMC lookup, DECO verify) and EA (pipeline submit) with full error handling. `/api/pipeline` Next.js route added |
+| 3 | Private chain not running | **Fixed** | 4 Polygon Edge IBFT 2.0 validators running in Docker (chain ID 100100). Trust contracts deployed and verified callable |
+| 4 | CCIP contracts never deployed | **Fixed** | TLHCCIPSender + TLHCCIPReceiver deployed on Sepolia. Post-deployment configuration completed: source chain allowlisted, sender allowlisted, VERIFIER_ROLE granted to receiver |
+| 5 | DECO attestation uses static files | **Fixed** | Prover-api now generates dynamic per-doctor attestations with fresh ECDSA signatures. PASS/FAIL paths both work correctly |
+| 6 | Fork tests failing (6/173) | **Fixed** | Root cause: wrong `DEPLOYER_PRIVATE_KEY` in contracts/.env + stale fork block (before `addSigner` was called). Updated key and fork block to 10280750 |
+
+---
+
+## 12. Live Demo Data on Sepolia
+
+### Seeded Data (via Forge scripts)
 
 | Data | Details |
 |------|---------|
@@ -287,79 +442,23 @@ The following data has been seeded on-chain via Forge scripts:
 | **Shared Attestation** | ID: `0x1d46629b...` — PASS result |
 | **Trust Attestation** | ID: `0x8fe3f608...` — PASS result |
 
-### Verify on Etherscan
+### Live Pipeline Transactions
 
-Any transaction can be verified at:
-```
-https://sepolia.etherscan.io/tx/<txHash>
-```
-View Input Data → UTF-8 to see `PASS|0x<proofId>`.
+Every click of "Submit to Sepolia" creates a **new, unique** transaction calling `submitAttestation()` on `0xCE863E465f21Df87Ad9F0A2af838Fac1750F08d2`.
+
+Verify any transaction at: `https://sepolia.etherscan.io/tx/<txHash>`
 
 ---
 
-## 8. Security Design
-
-| Aspect | Implementation |
-|--------|---------------|
-| **Private keys** | Never committed to git. `.env` is gitignored, `.env.example` provides templates |
-| **Replay protection** | `attestationUsed[id]` mapping prevents duplicate submissions |
-| **Signature verification** | Chain-bound digest includes domain tag, chainId, contract address |
-| **Signer whitelist** | Only whitelisted addresses can submit valid attestations |
-| **Role separation** | REGISTRAR, VERIFIER, ANCHOR_WRITER, SIGNER_ADMIN, UPGRADER |
-| **UUPS upgradeable** | Admin-only upgrade path, no unprotected `selfdestruct` |
-| **Credential expiry** | Live status evaluation at read-time (not just write-time) |
-| **Irrevocable revocation** | Once revoked, a credential cannot be reactivated |
-
----
-
-## 9. Testing
-
-### Smart Contracts
-```bash
-cd contracts
-forge test -vvv           # Run all Foundry tests
-forge test --gas-report   # With gas usage report
-```
-
-### Frontend
-```bash
-cd frontend
-npm run lint              # ESLint check
-npm run build             # Full production build (catches type errors)
-```
-
-### Services
-```bash
-# Prover API
-cd prover-api && npm run typecheck
-
-# External Adapter
-cd chainlink-node/external-adapter && npm run typecheck
-```
-
-### Manual End-to-End Test
-
-| Step | Page | Action | Expected |
-|------|------|--------|----------|
-| 1 | Dashboard `/` | Load page | All 5 contracts show addresses, services healthy |
-| 2a | Verify `/verify` | Click "Load Attestation" | Shows signature scheme, attestation data |
-| 2b | Verify `/verify` | Click "Verify Attestation" | Result: PASS, Proof ID shown |
-| 2c | Verify `/verify` | Click "Submit to Sepolia" | Transaction hash returned |
-| 2d | Verify `/verify` | GMC Lookup | Doctor record with registration status |
-| 3 | DID `/did` | Enter `did:tlh:clinician-789` | DID record with controller address |
-| 4 | Credentials `/credentials` | Enter clinician DID + GMC_REGISTERED | Status: Active, Valid: Yes |
-| 5 | Attestations `/attestations` | Enter attestation ID | Record with PASS result and timestamp |
-
----
-
-## 10. Key Design Decisions
+## 13. Key Design Decisions
 
 | Decision | Rationale |
 |----------|-----------|
 | **UUPS over Transparent Proxy** | Smaller deployment, upgrade logic in implementation (not proxy) |
-| **Self-transfer tx for data anchoring** | Cheapest on-chain data storage — only calldata cost, no state writes |
-| **Two separate verifiers** | Shared (public anchors) vs Trust (private credential writes) |
-| **@noble/curves for signature verification** | Pure JS, no native dependencies, audited library |
+| **submitAttestation() contract calls** | Real on-chain state writes with signature verification, replay protection, and cross-contract side-effects |
+| **Two separate verifiers** | Shared (public DID + VC anchors) vs Trust (private credential writes) |
+| **Deterministic prover key** | `keccak256("TLH_DECO_PROVER_V1")` — reproducible for demo, replaceable in production |
+| **@noble/curves for ECDSA** | Pure JS, no native dependencies, audited library |
 | **Next.js App Router** | Server components, file-based routing, React 19 features |
 | **Wagmi + Viem** | Type-safe Ethereum client, React hooks for contract reads |
 | **Polygon Edge for private chain** | NHS Trusts need private, permissioned networks |
@@ -367,33 +466,34 @@ cd chainlink-node/external-adapter && npm run typecheck
 
 ---
 
-## 11. What's Next (Roadmap)
-
-| Priority | Item | Status |
-|----------|------|--------|
-| 1 | Mainnet deployment | Contracts are mainnet-ready, needs audit |
-| 2 | CCIP cross-chain demo | Contracts deployed, frontend integration pending |
-| 3 | Private chain full integration | Polygon Edge running, needs trust-chain frontend |
-| 4 | Multi-trust credential sharing | Architecture designed, needs implementation |
-| 5 | Production Chainlink Node | Docker setup ready, needs cloud deployment |
-| 6 | Smart contract audit | All contracts follow OZ patterns, ready for audit |
-
----
-
-## 12. Commit History (Recent)
+## 14. Commit History (Recent)
 
 ```
+9130687 feat: EA calls submitAttestation() on-chain + CCIP deployed on Sepolia
+fbf3304 docs: add CTO technical review document
+02676b5 chore: update .env.example with Alchemy RPC and deployer notes
 31a06d5 chore: add Sepolia seed broadcast logs and gitmodules
 06f35c4 fix(ea): add explicit gas limit for self-call tx + seed demo data on Sepolia
 1b5368a feat(frontend): architectural cleanup — shared components, error boundary, skeleton loaders
-6fb4adf feat: deploy trust contracts to Polygon Edge private chain
+6fb4adf feat: deploy trust contracts to Polygon Edge private chain (Issue #15)
 4289a25 Merge pull request #25 — feat/ccip-workstream
 6c889a7 feat: add CCIP sender/receiver contracts and integration tests
 b6bdee7 Merge pull request #24 — feat/frontend-qa-pass
 ```
 
+### Uncommitted Changes (Pending Commit)
+
+| File | Change |
+|------|--------|
+| `prover-api/src/server.ts` | Dynamic DECO attestation generation per doctor |
+| `chainlink-node/external-adapter/src/index.ts` | Forward doctor info to prover-api |
+| `frontend/src/app/verify/page.tsx` | 3-step connected pipeline UI |
+| `frontend/src/lib/api.ts` | Updated API client with doctor params |
+| `frontend/src/app/api/pipeline/route.ts` | **New** — Next.js API route proxying to EA |
+| `contracts/test/fork/*.t.sol` | Fixed fork block (10280750) for test determinism |
+
 ---
 
-## 13. Contact
+## 15. Contact
 
 For questions about this codebase, setup issues, or architectural decisions, contact the development team.

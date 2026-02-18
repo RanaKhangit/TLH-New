@@ -39,7 +39,7 @@ interface IVCHashAnchorsRead {
 contract AttestationVerifierForkBehaviour is Test {
     // --- Sepolia deployed proxy ---
     address constant ATTESTATION_VERIFIER_PROXY = 0xCE863E465f21Df87Ad9F0A2af838Fac1750F08d2;
-    uint256 constant DEFAULT_FORK_BLOCK = 10273621;
+    uint256 constant DEFAULT_FORK_BLOCK = 10280750;
 
     // --- Domain constant (must match contract) ---
     string constant DOMAIN = "TLH_ATTESTATION_V1";

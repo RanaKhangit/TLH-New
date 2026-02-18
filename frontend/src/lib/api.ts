@@ -4,9 +4,13 @@ const EA_API = process.env.NEXT_PUBLIC_EA_URL || "http://localhost:8788";
 
 export interface DecoVerifyResult {
   result: "PASS" | "FAIL";
+  reason?: string;
   proofId: string;
   verificationType: string;
   completedAt: string;
+  gmcRefNo?: string;
+  registrationStatus?: string;
+  attestation?: DecoAttestation;
 }
 
 export interface DecoAttestation {
@@ -47,12 +51,28 @@ async function fetchJSON<T>(url: string, init?: RequestInit): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-export async function fetchDecoVerify(): Promise<DecoVerifyResult> {
-  return fetchJSON<DecoVerifyResult>(`${PROVER_API}/deco/verify`);
+export async function fetchDecoVerify(
+  surname?: string,
+  givenName?: string
+): Promise<DecoVerifyResult> {
+  let url = `${PROVER_API}/deco/verify`;
+  if (surname && givenName) {
+    const params = new URLSearchParams({ surname, givenName });
+    url = `${url}?${params}`;
+  }
+  return fetchJSON<DecoVerifyResult>(url);
 }
 
-export async function fetchDecoAttestation(): Promise<DecoAttestation> {
-  return fetchJSON<DecoAttestation>(`${PROVER_API}/deco/attestation`);
+export async function fetchDecoAttestation(
+  surname?: string,
+  givenName?: string
+): Promise<DecoAttestation> {
+  let url = `${PROVER_API}/deco/attestation`;
+  if (surname && givenName) {
+    const params = new URLSearchParams({ surname, givenName });
+    url = `${url}?${params}`;
+  }
+  return fetchJSON<DecoAttestation>(url);
 }
 
 export async function fetchGMCLookup(
@@ -85,14 +105,20 @@ export async function fetchEAHealth(): Promise<boolean> {
 }
 
 export async function triggerFullPipeline(
-  clinicianDID?: string
+  clinicianDID?: string,
+  surname?: string,
+  givenName?: string
 ): Promise<PipelineResult> {
   return fetchJSON<PipelineResult>(EA_API, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       id: `demo-${Date.now()}`,
-      data: { clinicianDID: clinicianDID || "did:tlh:clinician-789" },
+      data: {
+        clinicianDID: clinicianDID || "did:tlh:clinician-789",
+        surname,
+        givenName,
+      },
     }),
   });
 }

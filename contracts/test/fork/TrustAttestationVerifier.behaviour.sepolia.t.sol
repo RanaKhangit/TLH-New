@@ -46,7 +46,7 @@ interface ICredentialRegistryRead {
 contract TrustAttestationVerifierForkBehaviour is Test {
     // --- Sepolia deployed proxy ---
     address constant TRUST_ATTESTATION_VERIFIER_PROXY = 0x2Ad7540B14585ebFB3c86604d1927b40e2eFa5db;
-    uint256 constant DEFAULT_FORK_BLOCK = 10273621;
+    uint256 constant DEFAULT_FORK_BLOCK = 10280750;
 
     // --- Domain constant (must match contract) ---
     string constant DOMAIN = "TLH_ATTESTATION_V1";

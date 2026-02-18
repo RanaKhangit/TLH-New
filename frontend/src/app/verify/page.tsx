@@ -3,11 +3,9 @@
 import { useState } from "react";
 import {
   fetchDecoVerify,
-  fetchDecoAttestation,
   fetchGMCLookup,
   triggerFullPipeline,
   type DecoVerifyResult,
-  type DecoAttestation,
   type GMCRecord,
   type PipelineResult,
 } from "@/lib/api";
@@ -24,44 +22,61 @@ const DEMO_NAMES = [
 ];
 
 export default function VerifyPage() {
-  const [attestation, setAttestation] = useState<DecoAttestation | null>(null);
-  const [loadingAtt, setLoadingAtt] = useState(false);
-  const [attError, setAttError] = useState<string | null>(null);
-  const [verifyResult, setVerifyResult] = useState<DecoVerifyResult | null>(null);
-  const [verifying, setVerifying] = useState(false);
-  const [verifyError, setVerifyError] = useState<string | null>(null);
-  const [pipeline, setPipeline] = useState<PipelineResult | null>(null);
-  const [submitting, setSubmitting] = useState(false);
-  const [pipelineError, setPipelineError] = useState<string | null>(null);
+  // Step 1: GMC Lookup
   const [gmcResults, setGmcResults] = useState<GMCRecord[] | null>(null);
   const [gmcLoading, setGmcLoading] = useState(false);
   const [gmcError, setGmcError] = useState<string | null>(null);
+
+  // Step 2: DECO Verify (generates attestation + verifies it)
+  const [decoResult, setDecoResult] = useState<DecoVerifyResult | null>(null);
+  const [decoLoading, setDecoLoading] = useState(false);
+  const [decoError, setDecoError] = useState<string | null>(null);
+
+  // Step 3: Submit On-Chain
+  const [pipeline, setPipeline] = useState<PipelineResult | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [pipelineError, setPipelineError] = useState<string | null>(null);
+
   const [selectedName, setSelectedName] = useState(0);
 
-  async function loadAttestation() {
-    setLoadingAtt(true);
-    setAttError(null);
+  async function lookupGMC() {
+    setGmcLoading(true);
+    setGmcResults(null);
+    setGmcError(null);
+    // Reset downstream steps
+    setDecoResult(null);
+    setDecoError(null);
+    setPipeline(null);
+    setPipelineError(null);
     try {
-      const att = await fetchDecoAttestation();
-      setAttestation(att);
+      const { surname, givenName } = DEMO_NAMES[selectedName];
+      const results = await fetchGMCLookup(surname, givenName);
+      setGmcResults(results);
     } catch (e) {
-      setAttestation(null);
-      setAttError(e instanceof Error ? e.message : "Failed to load attestation. Is the Prover API running?");
+      setGmcError(
+        e instanceof Error ? e.message : "GMC lookup failed. Is the Prover API running?"
+      );
     }
-    setLoadingAtt(false);
+    setGmcLoading(false);
   }
 
-  async function runVerification() {
-    setVerifying(true);
-    setVerifyError(null);
-    setVerifyResult(null);
+  async function verifyDeco() {
+    setDecoLoading(true);
+    setDecoResult(null);
+    setDecoError(null);
+    // Reset downstream
+    setPipeline(null);
+    setPipelineError(null);
     try {
-      const result = await fetchDecoVerify();
-      setVerifyResult(result);
+      const { surname, givenName } = DEMO_NAMES[selectedName];
+      const result = await fetchDecoVerify(surname, givenName);
+      setDecoResult(result);
     } catch (e) {
-      setVerifyError(e instanceof Error ? e.message : "Verification failed");
+      setDecoError(
+        e instanceof Error ? e.message : "DECO verification failed"
+      );
     }
-    setVerifying(false);
+    setDecoLoading(false);
   }
 
   async function submitOnChain() {
@@ -69,11 +84,9 @@ export default function VerifyPage() {
     setPipelineError(null);
     setPipeline(null);
     try {
-      // Pass the selected doctor's name as a DID so the on-chain
-      // attestation is linked to the specific clinician
       const { surname, givenName } = DEMO_NAMES[selectedName];
       const clinicianDID = `did:tlh:${givenName.toLowerCase()}-${surname.toLowerCase()}`;
-      const result = await triggerFullPipeline(clinicianDID);
+      const result = await triggerFullPipeline(clinicianDID, surname, givenName);
       setPipeline(result);
     } catch (e) {
       setPipelineError(
@@ -83,20 +96,7 @@ export default function VerifyPage() {
     setSubmitting(false);
   }
 
-  async function lookupGMC() {
-    setGmcLoading(true);
-    setGmcResults(null);
-    setGmcError(null);
-    try {
-      const { surname, givenName } = DEMO_NAMES[selectedName];
-      const results = await fetchGMCLookup(surname, givenName);
-      setGmcResults(results);
-    } catch (e) {
-      setGmcResults(null);
-      setGmcError(e instanceof Error ? e.message : "GMC lookup failed. Is the Prover API running?");
-    }
-    setGmcLoading(false);
-  }
+  const { surname, givenName } = DEMO_NAMES[selectedName];
 
   return (
     <div className="space-y-8">
@@ -105,128 +105,253 @@ export default function VerifyPage() {
           Verify Credential
         </h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Run DECO attestation verification and submit results on-chain
+          End-to-end pipeline: GMC lookup &rarr; DECO attestation &rarr;
+          on-chain submission
         </p>
       </div>
 
-      {/* Load attestation */}
+      {/* Doctor Selector */}
+      <Card>
+        <h2 className="text-sm font-semibold text-foreground mb-3">
+          Select Doctor
+        </h2>
+        <select
+          value={selectedName}
+          onChange={(e) => {
+            setSelectedName(Number(e.target.value));
+            // Reset all steps when doctor changes
+            setGmcResults(null);
+            setGmcError(null);
+            setDecoResult(null);
+            setDecoError(null);
+            setPipeline(null);
+            setPipelineError(null);
+          }}
+          className="w-full rounded-lg border border-border bg-muted px-3 py-2 text-sm text-foreground"
+        >
+          {DEMO_NAMES.map((n, i) => (
+            <option key={i} value={i}>
+              {n.givenName} {n.surname}
+            </option>
+          ))}
+        </select>
+      </Card>
+
+      {/* Step 1: GMC Lookup */}
       <Card>
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-sm font-semibold text-foreground">
-            DECO Attestation Data
+            <span className="text-accent mr-2">Step 1</span>
+            GMC Registry Lookup
           </h2>
           <button
-            onClick={loadAttestation}
-            disabled={loadingAtt}
+            onClick={lookupGMC}
+            disabled={gmcLoading}
             className="rounded-lg bg-muted px-4 py-2 text-xs font-medium text-foreground hover:bg-muted/80 transition-colors disabled:opacity-50"
           >
-            {loadingAtt ? "Loading..." : "Load Attestation"}
+            {gmcLoading ? "Looking up..." : "Lookup GMC Registration"}
           </button>
         </div>
-        {attError && (
-          <div className="rounded-lg bg-danger/10 border border-danger/20 p-3 text-sm text-danger">
-            {attError}
-          </div>
-        )}
-        {loadingAtt && (
+
+        {gmcLoading && (
           <div className="space-y-2">
             <Skeleton className="h-3 w-full" />
             <Skeleton className="h-3 w-3/4" />
-            <Skeleton className="h-10 w-full" />
-            <Skeleton className="h-10 w-full" />
+            <Skeleton className="h-3 w-full" />
           </div>
         )}
-        {attestation && !loadingAtt && (
-          <dl className="space-y-2 text-sm">
-            <div className="flex justify-between">
-              <dt className="text-muted-foreground">Signature Scheme</dt>
-              <dd className="font-mono text-foreground">
-                {attestation.signature_scheme}
-              </dd>
-            </div>
-            <div className="flex justify-between">
-              <dt className="text-muted-foreground">Attestation Scheme</dt>
-              <dd className="font-mono text-foreground">
-                {attestation.attestation_scheme}
-              </dd>
-            </div>
-            <div>
-              <dt className="text-muted-foreground mb-1">Signature</dt>
-              <dd className="font-mono text-xs text-foreground bg-muted p-2 rounded break-all">
-                {formatBytes32(attestation.signature_hex)}
-              </dd>
-            </div>
-            <div>
-              <dt className="text-muted-foreground mb-1">Public Key</dt>
-              <dd className="font-mono text-xs text-foreground bg-muted p-2 rounded break-all">
-                {formatBytes32(attestation.public_key_hex)}
-              </dd>
-            </div>
-          </dl>
+
+        {gmcError && (
+          <div className="rounded-lg bg-danger/10 border border-danger/20 p-3 text-sm text-danger">
+            {gmcError}
+          </div>
+        )}
+
+        {gmcResults && gmcResults.length > 0 && !gmcLoading && (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border text-left text-xs text-muted-foreground">
+                  <th className="pb-2 pr-4">GMC Ref</th>
+                  <th className="pb-2 pr-4">Name</th>
+                  <th className="pb-2 pr-4">Qualification</th>
+                  <th className="pb-2 pr-4">Registration Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {gmcResults.map((r, i) => (
+                  <tr key={i} className="border-b border-border/50">
+                    <td className="py-2 pr-4 font-mono">{r.gmcRefNo}</td>
+                    <td className="py-2 pr-4">
+                      {r.givenName} {r.surname}
+                    </td>
+                    <td className="py-2 pr-4 text-muted-foreground">
+                      {r.qualification}
+                    </td>
+                    <td className="py-2 pr-4">
+                      <Badge
+                        variant={
+                          r.registrationStatus?.includes("Licence")
+                            ? "success"
+                            : "danger"
+                        }
+                      >
+                        {r.registrationStatus}
+                      </Badge>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {gmcResults && gmcResults.length === 0 && (
+          <div className="text-sm text-muted-foreground">No records found.</div>
         )}
       </Card>
 
-      {/* Verify */}
+      {/* Step 2: DECO Attestation Verification */}
       <Card>
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-sm font-semibold text-foreground">
-            Verification
+            <span className="text-accent mr-2">Step 2</span>
+            DECO Attestation Verification
           </h2>
           <button
-            onClick={runVerification}
-            disabled={verifying}
+            onClick={verifyDeco}
+            disabled={decoLoading}
             className="rounded-lg bg-accent px-4 py-2 text-xs font-bold text-accent-foreground hover:bg-accent/80 transition-colors disabled:opacity-50"
           >
-            {verifying ? "Verifying..." : "Verify Attestation"}
+            {decoLoading ? "Generating & Verifying..." : "Generate & Verify Attestation"}
           </button>
         </div>
 
-        {verifyError && (
-          <div className="rounded-lg bg-danger/10 border border-danger/20 p-3 text-sm text-danger">
-            {verifyError}
-          </div>
-        )}
+        <p className="text-xs text-muted-foreground mb-4">
+          Generates a DECO attestation for {givenName} {surname}&apos;s GMC
+          data, signs it with the prover key, then cryptographically verifies
+          the signature and registration predicate.
+        </p>
 
-        {verifying && (
+        {decoLoading && (
           <div className="space-y-2">
             <Skeleton className="h-3 w-24" />
             <Skeleton className="h-3 w-full" />
             <Skeleton className="h-3 w-3/4" />
+            <Skeleton className="h-10 w-full" />
           </div>
         )}
 
-        {verifyResult && !verifying && (
-          <div className="space-y-3">
-            <div className="flex items-center gap-3">
-              <span className="text-sm text-muted-foreground">Result:</span>
-              <Badge
-                variant={
-                  verifyResult.result === "PASS" ? "success" : "danger"
-                }
-              >
-                {verifyResult.result}
-              </Badge>
+        {decoError && (
+          <div className="rounded-lg bg-danger/10 border border-danger/20 p-3 text-sm text-danger">
+            {decoError}
+          </div>
+        )}
+
+        {decoResult && !decoLoading && (
+          <div className="space-y-4">
+            {/* Attestation data */}
+            {decoResult.attestation && (
+              <div className="space-y-2 text-sm">
+                <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                  Attestation
+                </h3>
+                <dl className="space-y-2">
+                  <div className="flex justify-between">
+                    <dt className="text-muted-foreground">Signature Scheme</dt>
+                    <dd className="font-mono text-foreground">
+                      {decoResult.attestation.signature_scheme}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-muted-foreground mb-1">Signature</dt>
+                    <dd className="font-mono text-xs text-foreground bg-muted p-2 rounded break-all">
+                      {formatBytes32(decoResult.attestation.signature_hex)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-muted-foreground mb-1">Public Key</dt>
+                    <dd className="font-mono text-xs text-foreground bg-muted p-2 rounded break-all">
+                      {formatBytes32(decoResult.attestation.public_key_hex)}
+                    </dd>
+                  </div>
+                </dl>
+              </div>
+            )}
+
+            {/* Verification result */}
+            <div className="border-t border-border pt-4 space-y-2 text-sm">
+              <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                Verification Result
+              </h3>
+              <div className="flex items-center gap-3">
+                <span className="text-muted-foreground">Result:</span>
+                <Badge
+                  variant={
+                    decoResult.result === "PASS" ? "success" : "danger"
+                  }
+                >
+                  {decoResult.result}
+                </Badge>
+              </div>
+              {decoResult.reason && (
+                <div className="flex justify-between">
+                  <dt className="text-muted-foreground">Reason</dt>
+                  <dd className="text-foreground text-right max-w-[60%]">
+                    {decoResult.reason}
+                  </dd>
+                </div>
+              )}
+              {decoResult.gmcRefNo && (
+                <div className="flex justify-between">
+                  <dt className="text-muted-foreground">GMC Ref (from proof)</dt>
+                  <dd className="font-mono text-foreground">
+                    {decoResult.gmcRefNo}
+                  </dd>
+                </div>
+              )}
+              {decoResult.registrationStatus && (
+                <div className="flex justify-between">
+                  <dt className="text-muted-foreground">
+                    Registration (from proof)
+                  </dt>
+                  <dd className="text-foreground">
+                    <Badge
+                      variant={
+                        decoResult.registrationStatus.includes("Licence")
+                          ? "success"
+                          : "danger"
+                      }
+                    >
+                      {decoResult.registrationStatus}
+                    </Badge>
+                  </dd>
+                </div>
+              )}
+              {decoResult.proofId && (
+                <div className="flex justify-between">
+                  <dt className="text-muted-foreground">Proof ID</dt>
+                  <dd className="font-mono text-foreground">
+                    {decoResult.proofId}
+                  </dd>
+                </div>
+              )}
+              {decoResult.completedAt && (
+                <div className="flex justify-between">
+                  <dt className="text-muted-foreground">Verified At</dt>
+                  <dd className="text-foreground">{decoResult.completedAt}</dd>
+                </div>
+              )}
             </div>
-            <dl className="space-y-2 text-sm">
-              <div className="flex justify-between">
-                <dt className="text-muted-foreground">Proof ID</dt>
-                <dd className="font-mono text-foreground">
-                  {verifyResult.proofId}
-                </dd>
-              </div>
-              <div className="flex justify-between">
-                <dt className="text-muted-foreground">Completed At</dt>
-                <dd className="text-foreground">{verifyResult.completedAt}</dd>
-              </div>
-            </dl>
           </div>
         )}
       </Card>
 
-      {/* Submit on-chain */}
+      {/* Step 3: Submit On-Chain */}
       <Card>
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-sm font-semibold text-foreground">
+            <span className="text-accent mr-2">Step 3</span>
             Submit On-Chain
           </h2>
           <button
@@ -238,11 +363,11 @@ export default function VerifyPage() {
           </button>
         </div>
 
-        {pipelineError && (
-          <div className="rounded-lg bg-danger/10 border border-danger/20 p-3 text-sm text-danger">
-            {pipelineError}
-          </div>
-        )}
+        <p className="text-xs text-muted-foreground mb-4">
+          Runs the full pipeline for {givenName} {surname}: EA verifies DECO
+          attestation, builds ADR-002 predicateData, signs chain-bound digest,
+          and calls submitAttestation() on the AttestationVerifier contract.
+        </p>
 
         {submitting && (
           <div className="space-y-2">
@@ -252,8 +377,20 @@ export default function VerifyPage() {
           </div>
         )}
 
+        {pipelineError && (
+          <div className="rounded-lg bg-danger/10 border border-danger/20 p-3 text-sm text-danger">
+            {pipelineError}
+          </div>
+        )}
+
         {pipeline && !submitting && (
           <dl className="space-y-2 text-sm">
+            <div className="flex justify-between">
+              <dt className="text-muted-foreground">Subject DID</dt>
+              <dd className="font-mono text-foreground text-xs">
+                did:tlh:{givenName.toLowerCase()}-{surname.toLowerCase()}
+              </dd>
+            </div>
             <div className="flex justify-between">
               <dt className="text-muted-foreground">Verification</dt>
               <dd>
@@ -296,90 +433,6 @@ export default function VerifyPage() {
               </dd>
             </div>
           </dl>
-        )}
-      </Card>
-
-      {/* GMC Lookup */}
-      <Card>
-        <h2 className="text-sm font-semibold text-foreground mb-4">
-          GMC Doctor Lookup
-        </h2>
-        <div className="flex items-end gap-3 mb-4">
-          <div className="flex-1">
-            <label className="block text-xs text-muted-foreground mb-1">
-              Demo Doctor
-            </label>
-            <select
-              value={selectedName}
-              onChange={(e) => setSelectedName(Number(e.target.value))}
-              className="w-full rounded-lg border border-border bg-muted px-3 py-2 text-sm text-foreground"
-            >
-              {DEMO_NAMES.map((n, i) => (
-                <option key={i} value={i}>
-                  {n.givenName} {n.surname}
-                </option>
-              ))}
-            </select>
-          </div>
-          <button
-            onClick={lookupGMC}
-            disabled={gmcLoading}
-            className="rounded-lg bg-muted px-4 py-2 text-xs font-medium text-foreground hover:bg-muted/80 transition-colors disabled:opacity-50"
-          >
-            {gmcLoading ? "Looking up..." : "Lookup"}
-          </button>
-        </div>
-
-        {gmcLoading && (
-          <div className="space-y-2">
-            <Skeleton className="h-3 w-full" />
-            <Skeleton className="h-3 w-3/4" />
-            <Skeleton className="h-3 w-full" />
-          </div>
-        )}
-
-        {gmcResults && gmcResults.length > 0 && (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border text-left text-xs text-muted-foreground">
-                  <th className="pb-2 pr-4">GMC Ref</th>
-                  <th className="pb-2 pr-4">Name</th>
-                  <th className="pb-2 pr-4">Registration Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {gmcResults.map((r, i) => (
-                  <tr key={i} className="border-b border-border/50">
-                    <td className="py-2 pr-4 font-mono">{r.gmcRefNo}</td>
-                    <td className="py-2 pr-4">
-                      {r.givenName} {r.surname}
-                    </td>
-                    <td className="py-2 pr-4">
-                      <Badge
-                        variant={
-                          r.registrationStatus?.includes("Licence")
-                            ? "success"
-                            : "danger"
-                        }
-                      >
-                        {r.registrationStatus}
-                      </Badge>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-
-        {gmcError && (
-          <div className="rounded-lg bg-danger/10 border border-danger/20 p-3 text-sm text-danger">
-            {gmcError}
-          </div>
-        )}
-        {gmcResults && gmcResults.length === 0 && (
-          <div className="text-sm text-muted-foreground">No records found.</div>
         )}
       </Card>
     </div>
