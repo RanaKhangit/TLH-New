@@ -112,9 +112,10 @@ app.post("/", async (req, res) => {
     console.log(`[EA] Sending transaction from ${account.address}`)
 
     const txHash = await walletClient.sendTransaction({
-      to: account.address, // Send to self
-      value: parseEther("0"), // No ETH value
+      to: account.address, // Send to self (data-anchoring pattern)
+      value: parseEther("0"),
       data: txData as `0x${string}`,
+      gas: 30000n, // Explicit gas limit — skip estimation (some RPCs reject self-call estimation)
     })
 
     console.log(`[EA] Transaction sent: ${txHash}`)
