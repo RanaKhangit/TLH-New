@@ -647,6 +647,18 @@ app.post("/gmc/lookup", (req, res) => {
   })
 })
 
+// GET /gmc/doctors - List all available doctors from CSV
+app.get("/gmc/doctors", (_req, res) => {
+  const data = loadGMCData()
+  const doctors = data.map((row) => ({
+    surname: row["Surname"],
+    givenName: row["Given Name"],
+    gmcRefNo: row["GMC Ref No"],
+    registrationStatus: row["Registration Status"],
+  }))
+  return res.json(doctors)
+})
+
 app.listen(PORT, () => {
   console.log(`prover-api listening on http://127.0.0.1:${PORT}`)
   console.log(`DECO verification endpoint: http://127.0.0.1:${PORT}/deco/verify`)

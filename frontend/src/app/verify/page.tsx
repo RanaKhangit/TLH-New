@@ -1,9 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   triggerFullPipeline,
+  fetchDoctors,
   type PipelineResult,
+  type DoctorEntry,
 } from "@/lib/api";
 import { useVerifyAttestation, useTrustVerifyAttestation } from "@/hooks/use-attestation-verifier";
 import { useIsCredentialValid } from "@/hooks/use-credential-registry";
@@ -12,20 +14,24 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 
-const DEMO_NAMES = [
-  { surname: "Adfcds", givenName: "Azhar" },
-  { surname: "Fsofkdoo", givenName: "Rosalind" },
-  { surname: "Hslllsp", givenName: "Keith" },
-  { surname: "Bskeodk", givenName: "Alison" },
-];
-
 export default function VerifyPage() {
+  const [doctors, setDoctors] = useState<DoctorEntry[]>([]);
+  const [doctorsLoading, setDoctorsLoading] = useState(true);
   const [pipeline, setPipeline] = useState<PipelineResult | null>(null);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedName, setSelectedName] = useState(0);
 
-  const { surname, givenName } = DEMO_NAMES[selectedName];
+  useEffect(() => {
+    fetchDoctors()
+      .then(setDoctors)
+      .catch(() => setError("Failed to load doctor list"))
+      .finally(() => setDoctorsLoading(false));
+  }, []);
+
+  const doctor = doctors[selectedName];
+  const surname = doctor?.surname ?? "";
+  const givenName = doctor?.givenName ?? "";
   const clinicianDID = `did:tlh:${givenName.toLowerCase()}-${surname.toLowerCase()}`;
 
   async function runPipeline() {
@@ -66,9 +72,9 @@ export default function VerifyPage() {
           }}
           className="w-full rounded-lg border border-border bg-muted px-3 py-2 text-sm text-foreground mb-4"
         >
-          {DEMO_NAMES.map((n, i) => (
+          {doctors.map((d, i) => (
             <option key={i} value={i}>
-              {n.givenName} {n.surname}
+              {d.givenName} {d.surname}
             </option>
           ))}
         </select>
@@ -82,10 +88,14 @@ export default function VerifyPage() {
 
         <button
           onClick={runPipeline}
-          disabled={running}
+          disabled={running || doctorsLoading || doctors.length === 0}
           className="w-full rounded-lg bg-accent px-4 py-3 text-sm font-bold text-accent-foreground hover:bg-accent/80 transition-colors disabled:opacity-50"
         >
-          {running ? "Running Pipeline..." : "Verify & Submit On-Chain"}
+          {doctorsLoading
+            ? "Loading Doctors..."
+            : running
+              ? "Running Pipeline..."
+              : "Verify & Submit On-Chain"}
         </button>
       </Card>
 
@@ -197,6 +207,7 @@ export default function VerifyPage() {
             <OnChainVerification
               attestationId={pipeline.data.attestationId as `0x${string}`}
               clinicianDID={clinicianDID}
+              privateChainAvailable={!!pipeline.data.privateTxHash}
             />
           )}
         </>
@@ -208,25 +219,37 @@ export default function VerifyPage() {
 function OnChainVerification({
   attestationId,
   clinicianDID,
+  privateChainAvailable,
 }: {
   attestationId: `0x${string}`;
   clinicianDID: string;
+  privateChainAvailable: boolean;
 }) {
   const subjectDID = toBytes32(clinicianDID);
   const predicateType = toBytes32("GMC_REGISTERED");
 
   const sepoliaAttestation = useVerifyAttestation(attestationId);
-  const trustAttestation = useTrustVerifyAttestation(attestationId);
-  const credentialValid = useIsCredentialValid(subjectDID, predicateType);
+
+  // Only call private chain hooks if chain is available
+  const trustAttestation = useTrustVerifyAttestation(
+    privateChainAvailable ? attestationId : undefined
+  );
+  const credentialValid = useIsCredentialValid(
+    privateChainAvailable ? subjectDID : undefined,
+    privateChainAvailable ? predicateType : undefined
+  );
+
+  // Treat offline chain as immediate "unavailable" state
+  const privateChainOffline = !privateChainAvailable;
 
   const sepoliaOk = sepoliaAttestation.data && sepoliaAttestation.data[0];
-  const trustOk = trustAttestation.data && trustAttestation.data[0];
-  const credOk = credentialValid.data === true;
+  const trustOk = !privateChainOffline && trustAttestation.data && trustAttestation.data[0];
+  const credOk = !privateChainOffline && credentialValid.data === true;
 
   const anyLoading =
     sepoliaAttestation.isLoading ||
-    trustAttestation.isLoading ||
-    credentialValid.isLoading;
+    (!privateChainOffline && trustAttestation.isLoading) ||
+    (!privateChainOffline && credentialValid.isLoading);
 
   return (
     <Card>
@@ -277,7 +300,9 @@ function OnChainVerification({
           <span className="text-muted-foreground">
             Private Chain TrustAttestationVerifier
           </span>
-          {trustAttestation.isLoading ? (
+          {privateChainOffline ? (
+            <Badge variant="warning">Offline</Badge>
+          ) : trustAttestation.isLoading ? (
             <span className="text-xs text-muted-foreground">Reading...</span>
           ) : trustAttestation.error ? (
             <Badge variant="warning">Unavailable</Badge>
@@ -304,7 +329,9 @@ function OnChainVerification({
           <span className="text-muted-foreground">
             Private Chain CredentialRegistry
           </span>
-          {credentialValid.isLoading ? (
+          {privateChainOffline ? (
+            <Badge variant="warning">Offline</Badge>
+          ) : credentialValid.isLoading ? (
             <span className="text-xs text-muted-foreground">Reading...</span>
           ) : credentialValid.error ? (
             <Badge variant="warning">Unavailable</Badge>
@@ -323,6 +350,8 @@ function OnChainVerification({
             <Badge variant="muted">Verifying...</Badge>
           ) : sepoliaOk && trustOk ? (
             <Badge variant="success">Both Chains Confirmed</Badge>
+          ) : sepoliaOk && privateChainOffline ? (
+            <Badge variant="warning">Sepolia Only (Private Chain Offline)</Badge>
           ) : sepoliaOk ? (
             <Badge variant="warning">Sepolia Only</Badge>
           ) : (

@@ -14,7 +14,14 @@ export function useVerifyAttestation(
     abi: AttestationVerifierABI,
     functionName: "verifyAttestation",
     args: attestationId ? [attestationId] : undefined,
-    query: { enabled: !!attestationId },
+    query: {
+      enabled: !!attestationId,
+      refetchInterval: (query) => {
+        // Poll every 4s until attestation appears on-chain, then stop
+        const data = query.state.data as readonly [boolean, ...unknown[]] | undefined;
+        return data?.[0] ? false : 4000;
+      },
+    },
   });
 }
 
@@ -28,6 +35,12 @@ export function useTrustVerifyAttestation(
     functionName: "verifyAttestation",
     args: attestationId ? [attestationId] : undefined,
     chainId: privateChain.id,
-    query: { enabled: !!attestationId },
+    query: {
+      enabled: !!attestationId,
+      refetchInterval: (query) => {
+        const data = query.state.data as readonly [boolean, ...unknown[]] | undefined;
+        return data?.[0] ? false : 4000;
+      },
+    },
   });
 }

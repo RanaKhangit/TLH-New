@@ -87,6 +87,17 @@ export async function fetchGMCLookup(
   return Array.isArray(data) ? data : [data];
 }
 
+export interface DoctorEntry {
+  surname: string;
+  givenName: string;
+  gmcRefNo: string;
+  registrationStatus: string;
+}
+
+export async function fetchDoctors(): Promise<DoctorEntry[]> {
+  return fetchJSON<DoctorEntry[]>(`${PROVER_API}/gmc/doctors`);
+}
+
 export async function fetchProverHealth(): Promise<boolean> {
   try {
     await fetch(`${PROVER_API}/health`, { signal: AbortSignal.timeout(3000) });
