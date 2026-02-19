@@ -5,8 +5,10 @@ import { useRouter, useSearchParams } from "next/navigation";
 import {
   triggerFullPipeline,
   fetchDoctors,
+  fetchGMCLookup,
   type PipelineResult,
   type DoctorEntry,
+  type GMCRecord,
 } from "@/lib/api";
 import { useVerifyAttestation, useTrustVerifyAttestation } from "@/hooks/use-attestation-verifier";
 import { useIsCredentialValid } from "@/hooks/use-credential-registry";
@@ -14,6 +16,7 @@ import { etherscanTxUrl, formatBytes32, toBytes32 } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { toast } from "sonner";
 
 export default function VerifyPage() {
   return (
@@ -72,7 +75,9 @@ function VerifyPageContent() {
       : null
   );
   const [running, setRunning] = useState(false);
+  const [pipelineStep, setPipelineStep] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [gmcRecord, setGmcRecord] = useState<GMCRecord | null>(null);
   const [selectedName, setSelectedName] = useState(initialDoctorIndex ? Number(initialDoctorIndex) : 0);
   const [restoredDID, setRestoredDID] = useState<string | null>(
     initialAttestationId && initialTxHash && initialDid ? initialDid : null
@@ -95,9 +100,24 @@ function VerifyPageContent() {
     setError(null);
     setPipeline(null);
     setRestoredDID(null);
+    setPipelineStep(0);
+    setGmcRecord(null);
     try {
+      // Simulate step progression while awaiting the single API call
+      const stepTimer = setInterval(() => {
+        setPipelineStep((s) => Math.min(s + 1, 4));
+      }, 3000);
+
       const result = await triggerFullPipeline(clinicianDID, surname, givenName);
+      clearInterval(stepTimer);
+      setPipelineStep(5);
       setPipeline(result);
+      toast.success("Pipeline complete — attestation submitted to both chains");
+
+      // Fetch full GMC record for display
+      fetchGMCLookup(surname, givenName)
+        .then((records) => { if (records.length > 0) setGmcRecord(records[0]); })
+        .catch(() => { /* non-critical */ });
 
       // Persist to URL so results survive navigation
       const params = new URLSearchParams({
@@ -113,7 +133,9 @@ function VerifyPageContent() {
       }
       router.replace(`/verify?${params.toString()}`, { scroll: false });
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Pipeline failed");
+      const msg = e instanceof Error ? e.message : "Pipeline failed";
+      setError(msg);
+      toast.error(`Pipeline failed: ${msg}`);
     }
     setRunning(false);
   }
@@ -144,6 +166,7 @@ function VerifyPageContent() {
             setPipeline(null);
             setError(null);
             setRestoredDID(null);
+            setGmcRecord(null);
             router.replace("/verify", { scroll: false });
           }}
           className="w-full rounded-lg border border-border bg-muted px-3 py-2 text-sm text-foreground mb-4"
@@ -175,13 +198,13 @@ function VerifyPageContent() {
         </button>
       </Card>
 
-      {/* Pipeline progress */}
+      {/* Pipeline progress stepper */}
       {running && (
         <Card>
           <h2 className="text-sm font-semibold text-foreground mb-3">
             Pipeline Running...
           </h2>
-          <div className="space-y-3">
+          <div className="space-y-1">
             {[
               "Looking up doctor in GMC register",
               "Generating DECO attestation",
@@ -189,9 +212,17 @@ function VerifyPageContent() {
               "Signing chain-bound digests",
               "Submitting to Sepolia + Private Chain",
             ].map((step, i) => (
-              <div key={i} className="flex items-center gap-3">
-                <span className="h-2 w-2 rounded-full bg-accent animate-pulse" />
-                <span className="text-sm text-muted-foreground">{step}</span>
+              <div key={i} className="flex items-center gap-3 py-1.5">
+                {i < pipelineStep ? (
+                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-success text-[10px] text-white font-bold shrink-0">&#10003;</span>
+                ) : i === pipelineStep ? (
+                  <span className="h-5 w-5 rounded-full border-2 border-accent bg-accent/20 animate-pulse shrink-0" />
+                ) : (
+                  <span className="h-5 w-5 rounded-full border-2 border-border shrink-0" />
+                )}
+                <span className={`text-sm ${i < pipelineStep ? "text-foreground" : i === pipelineStep ? "text-accent font-medium" : "text-muted-foreground"}`}>
+                  {step}
+                </span>
               </div>
             ))}
           </div>
@@ -213,6 +244,55 @@ function VerifyPageContent() {
       {/* Results */}
       {pipeline && !running && (
         <>
+          {/* GMC Lookup Result */}
+          <Card>
+            <h2 className="text-sm font-semibold text-foreground mb-4">
+              GMC Lookup Result
+            </h2>
+            {gmcRecord ? (
+              <dl className="space-y-3 text-sm">
+                <div className="flex justify-between">
+                  <dt className="text-muted-foreground">Name</dt>
+                  <dd className="text-foreground">{gmcRecord.givenName} {gmcRecord.surname}</dd>
+                </div>
+                <div className="flex justify-between items-center">
+                  <dt className="text-muted-foreground">GMC Reference No.</dt>
+                  <dd className="font-mono text-foreground">{gmcRecord.gmcRefNo}</dd>
+                </div>
+                <div className="flex justify-between items-center">
+                  <dt className="text-muted-foreground">Registration Status</dt>
+                  <dd>
+                    <Badge variant={gmcRecord.registrationStatus === "Registered with a licence to practise" ? "success" : "warning"}>
+                      {gmcRecord.registrationStatus}
+                    </Badge>
+                  </dd>
+                </div>
+                <div className="flex justify-between">
+                  <dt className="text-muted-foreground">Qualification</dt>
+                  <dd className="text-foreground">{gmcRecord.qualification || "—"}</dd>
+                </div>
+                <div className="flex justify-between">
+                  <dt className="text-muted-foreground">Place of Qualification</dt>
+                  <dd className="text-foreground">{gmcRecord.qualPlace || "—"}</dd>
+                </div>
+                <div className="flex justify-between">
+                  <dt className="text-muted-foreground">Year of Qualification</dt>
+                  <dd className="text-foreground">{gmcRecord.qualYear || "—"}</dd>
+                </div>
+                <div className="flex justify-between items-center">
+                  <dt className="text-muted-foreground">Revalidation Status</dt>
+                  <dd className="text-foreground">{gmcRecord.revalidationStatus || "—"}</dd>
+                </div>
+              </dl>
+            ) : (
+              <div className="space-y-2">
+                <Skeleton className="h-3 w-48" />
+                <Skeleton className="h-3 w-64" />
+                <Skeleton className="h-3 w-56" />
+              </div>
+            )}
+          </Card>
+
           {/* Pipeline results */}
           <Card>
             <h2 className="text-sm font-semibold text-foreground mb-4">
@@ -303,7 +383,7 @@ function VerifyPageContent() {
             />
           )}
 
-          {/* Link to DID Explorer */}
+          {/* Export + Explorer links */}
           <Card>
             <div className="flex items-center justify-between">
               <div>
@@ -314,12 +394,38 @@ function VerifyPageContent() {
                   View full history and linked data in Explorer
                 </p>
               </div>
-              <a
-                href={`/explorer?did=${encodeURIComponent(activeDID)}&attestationId=${pipeline.data.attestationId}`}
-                className="rounded-lg bg-muted px-4 py-2 text-sm font-medium text-foreground hover:bg-muted/80 transition-colors"
-              >
-                View in Explorer →
-              </a>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    const json = JSON.stringify({
+                      did: activeDID,
+                      attestationId: pipeline.data.attestationId,
+                      proofId: pipeline.data.proofId,
+                      verificationResult: pipeline.data.verificationResult,
+                      sepoliaTxHash: pipeline.data.txHash,
+                      privateTxHash: pipeline.data.privateTxHash ?? null,
+                      exportedAt: new Date().toISOString(),
+                    }, null, 2);
+                    const blob = new Blob([json], { type: "application/json" });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement("a");
+                    a.href = url;
+                    a.download = `attestation-${pipeline.data.attestationId.slice(0, 10)}.json`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                    toast.success("Attestation JSON exported");
+                  }}
+                  className="rounded-lg bg-muted px-4 py-2 text-sm font-medium text-foreground hover:bg-muted/80 transition-colors"
+                >
+                  Export JSON
+                </button>
+                <a
+                  href={`/explorer?did=${encodeURIComponent(activeDID)}&attestationId=${pipeline.data.attestationId}`}
+                  className="rounded-lg bg-muted px-4 py-2 text-sm font-medium text-foreground hover:bg-muted/80 transition-colors"
+                >
+                  View in Explorer →
+                </a>
+              </div>
             </div>
           </Card>
         </>

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { Toaster } from "sonner";
 import { Providers } from "./providers";
 import { Sidebar } from "@/components/layout/sidebar";
 import { ErrorBoundary } from "@/components/ui/error-boundary";
@@ -39,7 +40,8 @@ export default function RootLayout({
             Skip to main content
           </a>
           <Sidebar />
-          <div className="ml-60 flex min-h-screen flex-col">
+          <Toaster position="bottom-right" richColors closeButton theme="dark" />
+          <div className="md:ml-60 flex min-h-screen flex-col">
             <main id="main-content" className="flex-1 p-8">
               <ErrorBoundary>{children}</ErrorBoundary>
             </main>

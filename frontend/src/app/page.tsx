@@ -8,10 +8,12 @@ import {
   formatAddress,
   etherscanAddressUrl,
 } from "@/lib/utils";
-import { useEffect, useState } from "react";
-import { fetchProverHealth, fetchEAHealth } from "@/lib/api";
+import { useEffect, useState, useRef } from "react";
+import { fetchProverHealth, fetchEAHealth, type HealthResult } from "@/lib/api";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Badge } from "@/components/ui/badge";
+import { toast } from "sonner";
 
 function StatusDot({ ok }: { ok: boolean | undefined }) {
   if (ok === undefined) {
@@ -114,14 +116,28 @@ export default function DashboardPage() {
   const { sepoliaContracts, privateContracts, isLoading } = useContractHealth();
   const { data: sepoliaBlock } = useBlockNumber({ watch: true });
   const { data: privateBlock } = useBlockNumber({ chainId: privateChain.id, query: { retry: 1, refetchInterval: false } });
-  const [proverOk, setProverOk] = useState<boolean | undefined>(undefined);
-  const [eaOk, setEaOk] = useState<boolean | undefined>(undefined);
+  const [proverHealth, setProverHealth] = useState<HealthResult | undefined>(undefined);
+  const [eaHealth, setEaHealth] = useState<HealthResult | undefined>(undefined);
   const [lastPolled, setLastPolled] = useState<Date | null>(null);
+  const prevProver = useRef<boolean | undefined>(undefined);
+  const prevEa = useRef<boolean | undefined>(undefined);
 
   useEffect(() => {
     function poll() {
-      fetchProverHealth().then(setProverOk);
-      fetchEAHealth().then(setEaOk);
+      fetchProverHealth().then((r) => {
+        setProverHealth(r);
+        if (prevProver.current !== undefined && prevProver.current !== r.ok) {
+          toast[r.ok ? "success" : "error"](`Prover API ${r.ok ? "back online" : "went offline"}`);
+        }
+        prevProver.current = r.ok;
+      });
+      fetchEAHealth().then((r) => {
+        setEaHealth(r);
+        if (prevEa.current !== undefined && prevEa.current !== r.ok) {
+          toast[r.ok ? "success" : "error"](`External Adapter ${r.ok ? "back online" : "went offline"}`);
+        }
+        prevEa.current = r.ok;
+      });
       setLastPolled(new Date());
     }
     poll();
@@ -131,11 +147,20 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Trust Layer Health — dual-chain system status
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Trust Layer Health — dual-chain system status
+          </p>
+        </div>
+        {(() => {
+          const checks = [sepoliaBlock !== undefined, privateBlock !== undefined, proverHealth?.ok, eaHealth?.ok];
+          const ready = checks.filter(Boolean).length;
+          if (ready === 4) return <Badge variant="success">{ready}/4 All Systems Operational</Badge>;
+          if (ready >= 2) return <Badge variant="warning">{ready}/4 Degraded</Badge>;
+          return <Badge variant="danger">{ready}/4 Critical</Badge>;
+        })()}
       </div>
 
       {/* System status */}
@@ -172,20 +197,20 @@ export default function DashboardPage() {
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <StatusDot ok={proverOk} />
+            <StatusDot ok={proverHealth?.ok} />
             <div>
               <div className="text-sm text-foreground">Prover API</div>
               <div className="text-xs text-muted-foreground">
-                {proverOk === undefined ? "Checking..." : proverOk ? "Healthy (port 8787)" : "Offline"}
+                {proverHealth === undefined ? "Checking..." : proverHealth.ok ? `Healthy — ${proverHealth.latencyMs}ms` : "Offline"}
               </div>
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <StatusDot ok={eaOk} />
+            <StatusDot ok={eaHealth?.ok} />
             <div>
               <div className="text-sm text-foreground">External Adapter</div>
               <div className="text-xs text-muted-foreground">
-                {eaOk === undefined ? "Checking..." : eaOk ? "Healthy (port 8788)" : "Offline"}
+                {eaHealth === undefined ? "Checking..." : eaHealth.ok ? `Healthy — ${eaHealth.latencyMs}ms` : "Offline"}
               </div>
             </div>
           </div>

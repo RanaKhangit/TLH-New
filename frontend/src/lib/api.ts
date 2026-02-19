@@ -98,21 +98,28 @@ export async function fetchDoctors(): Promise<DoctorEntry[]> {
   return fetchJSON<DoctorEntry[]>(`${PROVER_API}/gmc/doctors`);
 }
 
-export async function fetchProverHealth(): Promise<boolean> {
+export interface HealthResult {
+  ok: boolean;
+  latencyMs: number | null;
+}
+
+export async function fetchProverHealth(): Promise<HealthResult> {
   try {
+    const start = performance.now();
     await fetch(`${PROVER_API}/health`, { signal: AbortSignal.timeout(3000) });
-    return true;
+    return { ok: true, latencyMs: Math.round(performance.now() - start) };
   } catch {
-    return false;
+    return { ok: false, latencyMs: null };
   }
 }
 
-export async function fetchEAHealth(): Promise<boolean> {
+export async function fetchEAHealth(): Promise<HealthResult> {
   try {
+    const start = performance.now();
     await fetch(`${EA_API}/health`, { signal: AbortSignal.timeout(3000) });
-    return true;
+    return { ok: true, latencyMs: Math.round(performance.now() - start) };
   } catch {
-    return false;
+    return { ok: false, latencyMs: null };
   }
 }
 

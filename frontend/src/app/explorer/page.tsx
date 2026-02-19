@@ -30,6 +30,8 @@ import {
 import { Card } from "@/components/ui/card";
 import { Badge, type BadgeVariant } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { toast } from "sonner";
+import { CONTRACTS, PRIVATE_CHAIN_CONTRACTS, CCIP_CONTRACTS } from "@/lib/contracts";
 
 type Tab = "did" | "credentials" | "attestations";
 
@@ -85,11 +87,27 @@ function ExplorerContent() {
 
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Explorer</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Query on-chain data — DIDs, Credentials, and Attestations
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">Explorer</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Query on-chain data — DIDs, Credentials, and Attestations
+          </p>
+        </div>
+        <button
+          onClick={() => {
+            const all = [
+              ...Object.entries(CONTRACTS).filter(([, v]) => typeof v === "object" && "proxy" in v).map(([k, v]) => `${k}: ${(v as { proxy: string }).proxy}`),
+              ...Object.entries(CCIP_CONTRACTS).map(([k, v]) => `${k}: ${v.proxy}`),
+              ...Object.entries(PRIVATE_CHAIN_CONTRACTS).filter(([, v]) => typeof v === "object" && "proxy" in v).map(([k, v]) => `${k}: ${(v as { proxy: string }).proxy}`),
+            ].join("\n");
+            navigator.clipboard.writeText(all);
+            toast.success("All contract addresses copied to clipboard");
+          }}
+          className="rounded-lg bg-muted px-4 py-2 text-sm font-medium text-foreground hover:bg-muted/80 transition-colors shrink-0"
+        >
+          Copy All Addresses
+        </button>
       </div>
 
       {/* Tab bar */}
@@ -124,6 +142,24 @@ const DEMO_DIDS = [
   { label: "did:tlh:patient-123", value: "did:tlh:patient-123" },
 ];
 
+function useRecentDIDs() {
+  const [recent, setRecent] = useState<string[]>([]);
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem("tlh-recent-dids");
+      if (stored) setRecent(JSON.parse(stored));
+    } catch { /* ignore */ }
+  }, []);
+  function add(did: string) {
+    setRecent((prev) => {
+      const next = [did, ...prev.filter((d) => d !== did)].slice(0, 5);
+      localStorage.setItem("tlh-recent-dids", JSON.stringify(next));
+      return next;
+    });
+  }
+  return { recent, add };
+}
+
 function DIDTab() {
   const searchParams = useSearchParams();
   const initialDid = searchParams.get("did");
@@ -136,6 +172,7 @@ function DIDTab() {
   );
   const [inputError, setInputError] = useState<string | null>(null);
   const highlightedAttestation = initialAttestationId ? (initialAttestationId as `0x${string}`) : undefined;
+  const { recent: recentDIDs, add: addRecentDID } = useRecentDIDs();
 
   const { data, isLoading, error } = useResolveDID(queriedDID);
 
@@ -147,16 +184,22 @@ function DIDTab() {
     }
     if (hashMode) {
       setQueriedDID(toBytes32(input.trim()));
+      addRecentDID(input.trim());
     } else {
       if (isValidBytes32(input.trim())) {
         setQueriedDID(input.trim() as `0x${string}`);
+        addRecentDID(input.trim());
       } else {
         setInputError("Invalid format — must be 0x followed by 64 hex characters.");
       }
     }
   }
 
-  const notFound = error?.message?.includes("revert") || error?.message?.includes("DIDNotFound");
+  // DID not found: contract may revert OR return zero-value data (controller = 0x0, timestamps = 0)
+  const notFound =
+    error?.message?.includes("revert") ||
+    error?.message?.includes("DIDNotFound") ||
+    (data && !isLoading && !error && data[0] === "0x0000000000000000000000000000000000000000" && data[2] === 0n);
 
   return (
     <div className="space-y-6">
@@ -187,7 +230,7 @@ function DIDTab() {
             </div>
             <button
               onClick={handleResolve}
-              disabled={!input.trim() || isLoading}
+              disabled={isLoading}
               className="rounded-lg bg-accent px-4 py-2 text-xs font-bold text-accent-foreground hover:bg-accent/80 transition-colors disabled:opacity-50"
             >
               {isLoading ? "Resolving..." : "Resolve DID"}
@@ -195,7 +238,7 @@ function DIDTab() {
           </div>
           {inputError && <p className="text-xs text-danger">{inputError}</p>}
 
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             {DEMO_DIDS.map((d) => (
               <button
                 key={d.value}
@@ -206,6 +249,23 @@ function DIDTab() {
               </button>
             ))}
           </div>
+
+          {recentDIDs.length > 0 && (
+            <div>
+              <div className="text-xs text-muted-foreground mb-1.5">Recent DIDs</div>
+              <div className="flex gap-2 flex-wrap">
+                {recentDIDs.map((d) => (
+                  <button
+                    key={d}
+                    onClick={() => { setInput(d); setHashMode(d.startsWith("did:") || !d.startsWith("0x")); }}
+                    className="rounded-md bg-muted px-2 py-1 text-xs font-mono text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    {d.length > 30 ? `${d.slice(0, 14)}...${d.slice(-6)}` : d}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {queriedDID && (
             <div className="text-xs text-muted-foreground font-mono">

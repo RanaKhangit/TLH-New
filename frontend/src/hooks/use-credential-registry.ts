@@ -17,7 +17,14 @@ export function useGetCredential(
     args:
       subjectDID && predicateType ? [subjectDID, predicateType] : undefined,
     chainId: privateChain.id,
-    query: { enabled: !!subjectDID && !!predicateType },
+    query: {
+      enabled: !!subjectDID && !!predicateType,
+      refetchInterval: (query) => {
+        // Poll every 4s until credential appears on-chain, then stop
+        const data = query.state.data as boolean | undefined;
+        return data ? false : 4000;
+      },
+    },
   });
 }
 
@@ -32,6 +39,13 @@ export function useIsCredentialValid(
     args:
       subjectDID && predicateType ? [subjectDID, predicateType] : undefined,
     chainId: privateChain.id,
-    query: { enabled: !!subjectDID && !!predicateType },
+    query: {
+      enabled: !!subjectDID && !!predicateType,
+      refetchInterval: (query) => {
+        // Poll every 4s until credential is confirmed valid, then stop
+        const data = query.state.data as boolean | undefined;
+        return data ? false : 4000;
+      },
+    },
   });
 }
