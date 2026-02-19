@@ -18,6 +18,10 @@ export const CONTRACTS = {
     implementation:
       "0x2ae518d86774c814a73ca03464b355a3a228ac8d" as `0x${string}`,
   },
+} as const;
+
+/** CCIP cross-chain contracts on Sepolia */
+export const CCIP_CONTRACTS = {
   TLHCCIPReceiver: {
     proxy: "0x234Aec51d3977bA5174B068d2Daf15e5367C0bF0" as `0x${string}`,
     implementation:
@@ -28,8 +32,24 @@ export const CONTRACTS = {
     implementation:
       "0x30De5aDcD1Db72F93Ed4ceF92240b2A97D652969" as `0x${string}`,
   },
-  CCIPRouter: "0x0BF3dE8c5D3e8A2B34D2BEeB17ABfCeBaf363A59" as `0x${string}`,
 } as const;
+
+/** Chainlink Automation jobs (node-centric) */
+export const CHAINLINK_JOBS = [
+  {
+    name: "DECO Verification (Webhook)",
+    type: "webhook",
+    file: "deco-verification-job.toml",
+    description: "On-demand DECO attestation verification",
+  },
+  {
+    name: "DECO Verification (Cron)",
+    type: "cron",
+    schedule: "0 * * * * *",
+    file: "deco-verification-cron.toml",
+    description: "Scheduled credential re-verification",
+  },
+] as const;
 
 /** Private trust chain contracts (Polygon Edge, chain ID 100100) */
 export const PRIVATE_CHAIN_CONTRACTS = {
