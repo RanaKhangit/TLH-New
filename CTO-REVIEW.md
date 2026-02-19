@@ -136,8 +136,8 @@ All contracts are deployed as **UUPS upgradeable proxies** with role-based acces
 
 | Contract | Proxy Address | Purpose |
 |----------|---------------|---------|
-| **CredentialRegistry** | `0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9` | Trust-chain credential storage |
-| **TrustAttestationVerifier** | `0x0165878A594ca255338adfa4d48449f69242Eb8F` | Trust-chain attestation verifier |
+| **CredentialRegistry** | `0x9A9f2CCfdE556A7E9Ff0848998Aa4a0CFD8863AE` | Trust-chain credential storage |
+| **TrustAttestationVerifier** | `0x68B1D87F95878fE05B998F19b66F4baba5De1aed` | Trust-chain attestation verifier |
 
 **Deployer / Admin:** `0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266`
 

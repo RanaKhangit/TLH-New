@@ -44,43 +44,39 @@ function VerifyPageContent() {
 
   useEffect(() => { document.title = "Verify Credential | Trust Layer Health"; }, []);
 
+  // Restore pipeline result from URL search params on mount
+  const initialAttestationId = searchParams.get("attestationId");
+  const initialTxHash = searchParams.get("txHash");
+  const initialProofId = searchParams.get("proofId");
+  const initialResult = searchParams.get("result");
+  const initialPrivateTxHash = searchParams.get("privateTxHash");
+  const initialDoctorIndex = searchParams.get("doctor");
+  const initialDid = searchParams.get("did");
+
   const [doctors, setDoctors] = useState<DoctorEntry[]>([]);
   const [doctorsLoading, setDoctorsLoading] = useState(true);
-  const [pipeline, setPipeline] = useState<PipelineResult | null>(null);
+  const [pipeline, setPipeline] = useState<PipelineResult | null>(
+    initialAttestationId && initialTxHash
+      ? {
+          jobRunID: "restored",
+          statusCode: 200,
+          data: {
+            result: initialTxHash,
+            txHash: initialTxHash,
+            privateTxHash: initialPrivateTxHash || undefined,
+            proofId: initialProofId || "",
+            attestationId: initialAttestationId,
+            verificationResult: initialResult || "PASS",
+          },
+        }
+      : null
+  );
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [selectedName, setSelectedName] = useState(0);
-  const [restoredDID, setRestoredDID] = useState<string | null>(null);
-
-  // Restore pipeline result from URL search params on mount
-  useEffect(() => {
-    const attestationId = searchParams.get("attestationId");
-    const txHash = searchParams.get("txHash");
-    const proofId = searchParams.get("proofId");
-    const verificationResult = searchParams.get("result");
-    const privateTxHash = searchParams.get("privateTxHash");
-    const didIndex = searchParams.get("doctor");
-    const did = searchParams.get("did");
-
-    if (attestationId && txHash) {
-      setPipeline({
-        jobRunID: "restored",
-        statusCode: 200,
-        data: {
-          result: txHash,
-          txHash,
-          privateTxHash: privateTxHash || undefined,
-          proofId: proofId || "",
-          attestationId,
-          verificationResult: verificationResult || "PASS",
-        },
-      });
-      if (did) setRestoredDID(did);
-    }
-    if (didIndex) {
-      setSelectedName(Number(didIndex));
-    }
-  }, [searchParams]);
+  const [selectedName, setSelectedName] = useState(initialDoctorIndex ? Number(initialDoctorIndex) : 0);
+  const [restoredDID, setRestoredDID] = useState<string | null>(
+    initialAttestationId && initialTxHash && initialDid ? initialDid : null
+  );
 
   useEffect(() => {
     fetchDoctors()

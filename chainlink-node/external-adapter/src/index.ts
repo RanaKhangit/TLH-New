@@ -20,11 +20,9 @@ import {
   encodePacked,
   toHex,
   concat,
-  hashMessage,
-  getContractAddress,
   defineChain,
 } from "viem"
-import { privateKeyToAccount, signMessage } from "viem/accounts"
+import { privateKeyToAccount } from "viem/accounts"
 import { sepolia } from "viem/chains"
 import dotenv from "dotenv"
 
@@ -58,7 +56,7 @@ const privateChain = defineChain({
 
 // --- Contract addresses ---
 const ATTESTATION_VERIFIER = "0xce863e465f21df87ad9f0a2af838fac1750f08d2" as `0x${string}` // Sepolia
-const TRUST_ATTESTATION_VERIFIER = "0x0165878A594ca255338adfa4d48449f69242Eb8F" as `0x${string}` // Private chain
+const TRUST_ATTESTATION_VERIFIER = "0x68B1D87F95878fE05B998F19b66F4baba5De1aed" as `0x${string}` // Private chain
 
 // --- ABI for submitAttestation ---
 const SUBMIT_ATTESTATION_ABI = [

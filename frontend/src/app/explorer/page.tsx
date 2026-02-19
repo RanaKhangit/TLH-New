@@ -69,17 +69,12 @@ function ExplorerSkeleton() {
 function ExplorerContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<Tab>("did");
+  const initialTab = searchParams.get("tab");
+  const [activeTab, setActiveTab] = useState<Tab>(
+    initialTab === "credentials" || initialTab === "attestations" ? initialTab : "did"
+  );
 
   useEffect(() => { document.title = "Explorer | Trust Layer Health"; }, []);
-
-  // Accept tab from URL (e.g. /explorer?tab=attestations)
-  useEffect(() => {
-    const tab = searchParams.get("tab");
-    if (tab === "credentials" || tab === "attestations") {
-      setActiveTab(tab);
-    }
-  }, [searchParams]);
 
   function handleTabChange(tab: Tab) {
     setActiveTab(tab);
@@ -131,27 +126,18 @@ const DEMO_DIDS = [
 
 function DIDTab() {
   const searchParams = useSearchParams();
+  const initialDid = searchParams.get("did");
+  const initialAttestationId = searchParams.get("attestationId");
 
-  const [input, setInput] = useState("");
+  const [input, setInput] = useState(initialDid ?? "");
   const [hashMode, setHashMode] = useState(true);
-  const [queriedDID, setQueriedDID] = useState<`0x${string}` | undefined>();
+  const [queriedDID, setQueriedDID] = useState<`0x${string}` | undefined>(
+    initialDid ? toBytes32(initialDid) : undefined
+  );
   const [inputError, setInputError] = useState<string | null>(null);
-  const [highlightedAttestation, setHighlightedAttestation] = useState<`0x${string}` | undefined>();
+  const highlightedAttestation = initialAttestationId ? (initialAttestationId as `0x${string}`) : undefined;
 
   const { data, isLoading, error } = useResolveDID(queriedDID);
-
-  useEffect(() => {
-    const did = searchParams.get("did");
-    const attestationId = searchParams.get("attestationId");
-    if (did) {
-      setInput(did);
-      setHashMode(true);
-      setQueriedDID(toBytes32(did));
-    }
-    if (attestationId) {
-      setHighlightedAttestation(attestationId as `0x${string}`);
-    }
-  }, [searchParams]);
 
   function handleResolve() {
     setInputError(null);

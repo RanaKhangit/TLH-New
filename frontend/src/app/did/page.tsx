@@ -49,28 +49,18 @@ function DIDExplorerContent() {
 
   useEffect(() => { document.title = "DID Explorer | Trust Layer Health"; }, []);
 
-  const [input, setInput] = useState("");
+  const initialDid = searchParams.get("did");
+  const initialAttestationId = searchParams.get("attestationId");
+
+  const [input, setInput] = useState(initialDid ?? "");
   const [hashMode, setHashMode] = useState(true);
-  const [queriedDID, setQueriedDID] = useState<`0x${string}` | undefined>();
+  const [queriedDID, setQueriedDID] = useState<`0x${string}` | undefined>(
+    initialDid ? toBytes32(initialDid) : undefined
+  );
   const [inputError, setInputError] = useState<string | null>(null);
-  const [highlightedAttestation, setHighlightedAttestation] = useState<`0x${string}` | undefined>();
+  const highlightedAttestation = initialAttestationId ? (initialAttestationId as `0x${string}`) : undefined;
 
   const { data, isLoading, error } = useResolveDID(queriedDID);
-
-  // Accept DID and attestationId from URL (e.g. from Verify page link)
-  useEffect(() => {
-    const did = searchParams.get("did");
-    const attestationId = searchParams.get("attestationId");
-
-    if (did) {
-      setInput(did);
-      setHashMode(true);
-      setQueriedDID(toBytes32(did));
-    }
-    if (attestationId) {
-      setHighlightedAttestation(attestationId as `0x${string}`);
-    }
-  }, [searchParams]);
 
   function handleResolve() {
     setInputError(null);
