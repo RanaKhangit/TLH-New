@@ -59,7 +59,7 @@ export function useContractHealth() {
         chainId: privateChain.id,
       },
     ],
-    query: { refetchInterval: 30000 },
+    query: { refetchInterval: 30000, retry: 1 },
   });
 
   const sepoliaNames = [
@@ -91,7 +91,8 @@ export function useContractHealth() {
     sepoliaContracts,
     privateContracts,
     contracts: [...sepoliaContracts, ...privateContracts],
-    isLoading: sepoliaResult.isLoading || privateResult.isLoading,
-    error: sepoliaResult.error || privateResult.error,
+    isLoading: sepoliaResult.isLoading,
+    privateChainOffline: privateResult.isError || !privateResult.data,
+    error: sepoliaResult.error,
   };
 }

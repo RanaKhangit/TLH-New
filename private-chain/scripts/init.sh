@@ -42,6 +42,7 @@ mkdir -p "$DATA_DIR"
 echo "[2/3] Generating validator secrets..."
 
 VALIDATOR_ADDRESSES=()
+VALIDATOR_BLS_KEYS=()
 BOOTNODE_MULTIADDRS=()
 
 for i in "${!VALIDATORS[@]}"; do
@@ -55,23 +56,26 @@ for i in "${!VALIDATORS[@]}"; do
         "$IMAGE" \
         secrets init --data-dir /data --json --insecure 2>&1)
 
-    # Extract node ID and address from JSON output
+    # Extract node ID, address, and BLS public key from JSON output
     node_id=$(echo "$output" | grep -o '"node_id":"[^"]*"' | head -1 | cut -d'"' -f4)
     address=$(echo "$output" | grep -o '"address":"[^"]*"' | head -1 | cut -d'"' -f4)
+    bls_pubkey=$(echo "$output" | grep -o '"bls_pubkey":"[^"]*"' | head -1 | cut -d'"' -f4)
 
-    if [ -z "$node_id" ] || [ -z "$address" ]; then
+    if [ -z "$node_id" ] || [ -z "$address" ] || [ -z "$bls_pubkey" ]; then
         echo "  ERROR: Failed to extract secrets for $name"
         echo "  Output: $output"
         exit 1
     fi
 
     VALIDATOR_ADDRESSES+=("$address")
+    VALIDATOR_BLS_KEYS+=("$bls_pubkey")
     # libp2p port = 10001 + index
     port=$((10001 + i))
     BOOTNODE_MULTIADDRS+=("/dns4/$name/tcp/$port/p2p/$node_id")
 
-    echo "    Address: $address"
-    echo "    Node ID: ${node_id:0:16}..."
+    echo "    Address:    $address"
+    echo "    BLS PubKey: ${bls_pubkey:0:24}..."
+    echo "    Node ID:    ${node_id:0:16}..."
 done
 
 echo ""
@@ -79,10 +83,10 @@ echo ""
 # ── Step 3: Generate genesis.json ───────────────────────────────────
 echo "[3/3] Generating genesis.json..."
 
-# Build validator flags
+# Build validator flags (0.9.0 format: address:blsPublicKey)
 IBFT_FLAGS=()
-for addr in "${VALIDATOR_ADDRESSES[@]}"; do
-    IBFT_FLAGS+=(--ibft-validator "$addr")
+for i in "${!VALIDATOR_ADDRESSES[@]}"; do
+    IBFT_FLAGS+=(--ibft-validator "${VALIDATOR_ADDRESSES[$i]}:${VALIDATOR_BLS_KEYS[$i]}")
 done
 
 # Build bootnode flags

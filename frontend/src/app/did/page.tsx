@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { useResolveDID } from "@/hooks/use-did-registry";
 import { useGetAttestation } from "@/hooks/use-attestation-by-did";
@@ -23,6 +23,28 @@ const DEMO_DIDS = [
 ];
 
 export default function DIDExplorerPage() {
+  return (
+    <Suspense fallback={<DIDExplorerSkeleton />}>
+      <DIDExplorerContent />
+    </Suspense>
+  );
+}
+
+function DIDExplorerSkeleton() {
+  return (
+    <div className="space-y-8">
+      <div>
+        <Skeleton className="h-8 w-48 mb-2" />
+        <Skeleton className="h-4 w-72" />
+      </div>
+      <Card>
+        <Skeleton className="h-10 w-full" />
+      </Card>
+    </div>
+  );
+}
+
+function DIDExplorerContent() {
   const searchParams = useSearchParams();
 
   const [input, setInput] = useState("");

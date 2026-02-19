@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   triggerFullPipeline,
@@ -16,6 +16,29 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export default function VerifyPage() {
+  return (
+    <Suspense fallback={<VerifyPageSkeleton />}>
+      <VerifyPageContent />
+    </Suspense>
+  );
+}
+
+function VerifyPageSkeleton() {
+  return (
+    <div className="space-y-8">
+      <div>
+        <Skeleton className="h-8 w-48 mb-2" />
+        <Skeleton className="h-4 w-72" />
+      </div>
+      <Card>
+        <Skeleton className="h-10 w-full mb-4" />
+        <Skeleton className="h-10 w-32" />
+      </Card>
+    </div>
+  );
+}
+
+function VerifyPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -154,16 +177,29 @@ export default function VerifyPage() {
         </button>
       </Card>
 
-      {/* Loading state */}
+      {/* Pipeline progress */}
       {running && (
         <Card>
+          <h2 className="text-sm font-semibold text-foreground mb-3">
+            Pipeline Running...
+          </h2>
           <div className="space-y-3">
-            <Skeleton className="h-3 w-48" />
-            <Skeleton className="h-3 w-full" />
-            <Skeleton className="h-3 w-3/4" />
-            <Skeleton className="h-3 w-full" />
-            <Skeleton className="h-3 w-1/2" />
+            {[
+              "Looking up doctor in GMC register",
+              "Generating DECO attestation",
+              "Verifying proof via Prover API",
+              "Signing chain-bound digests",
+              "Submitting to Sepolia + Private Chain",
+            ].map((step, i) => (
+              <div key={i} className="flex items-center gap-3">
+                <span className="h-2 w-2 rounded-full bg-accent animate-pulse" />
+                <span className="text-sm text-muted-foreground">{step}</span>
+              </div>
+            ))}
           </div>
+          <p className="text-xs text-muted-foreground mt-4">
+            This may take 10-30 seconds depending on chain confirmation times.
+          </p>
         </Card>
       )}
 

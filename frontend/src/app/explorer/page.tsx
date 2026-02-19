@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useSearchParams } from "next/navigation";
+import { useState, useEffect, Suspense } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 
 // DID tab imports
 import { useResolveDID } from "@/hooks/use-did-registry";
@@ -40,7 +40,35 @@ const TABS: { key: Tab; label: string }[] = [
 ];
 
 export default function ExplorerPage() {
+  return (
+    <Suspense fallback={<ExplorerSkeleton />}>
+      <ExplorerContent />
+    </Suspense>
+  );
+}
+
+function ExplorerSkeleton() {
+  return (
+    <div className="space-y-8">
+      <div>
+        <Skeleton className="h-8 w-32 mb-2" />
+        <Skeleton className="h-4 w-64" />
+      </div>
+      <div className="flex gap-4 border-b border-border pb-2">
+        <Skeleton className="h-8 w-16" />
+        <Skeleton className="h-8 w-24" />
+        <Skeleton className="h-8 w-24" />
+      </div>
+      <Card>
+        <Skeleton className="h-10 w-full" />
+      </Card>
+    </div>
+  );
+}
+
+function ExplorerContent() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState<Tab>("did");
 
   // Accept tab from URL (e.g. /explorer?tab=attestations)
@@ -50,6 +78,13 @@ export default function ExplorerPage() {
       setActiveTab(tab);
     }
   }, [searchParams]);
+
+  function handleTabChange(tab: Tab) {
+    setActiveTab(tab);
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("tab", tab);
+    router.replace(`/explorer?${params.toString()}`, { scroll: false });
+  }
 
   return (
     <div className="space-y-8">
@@ -65,7 +100,7 @@ export default function ExplorerPage() {
         {TABS.map((tab) => (
           <button
             key={tab.key}
-            onClick={() => setActiveTab(tab.key)}
+            onClick={() => handleTabChange(tab.key)}
             className={`px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px ${
               activeTab === tab.key
                 ? "border-accent text-accent"
@@ -144,7 +179,7 @@ function DIDTab() {
                 onChange={(e) => setHashMode(e.target.checked)}
                 className="rounded"
               />
-              Hash string to bytes32 (keccak256)
+              <span title="Converts human-readable strings (like DID identifiers) into the bytes32 format used on-chain via keccak256 hashing">Hash string to bytes32 (keccak256)</span>
             </label>
           </div>
 
@@ -188,6 +223,13 @@ function DIDTab() {
           )}
         </div>
       </Card>
+
+      {!queriedDID && !isLoading && (
+        <div className="text-center py-8 text-muted-foreground">
+          <p className="text-sm">Enter a DID above to query the on-chain registry.</p>
+          <p className="text-xs mt-1">Try one of the demo DIDs to get started.</p>
+        </div>
+      )}
 
       {isLoading && queriedDID && (
         <Card>
@@ -434,6 +476,13 @@ function CredentialsTab() {
         </div>
       </Card>
 
+      {!queriedDID && !credLoading && (
+        <div className="text-center py-8 text-muted-foreground">
+          <p className="text-sm">Enter a Subject DID and Predicate Type to look up credential state.</p>
+          <p className="text-xs mt-1">Reads from CredentialRegistry on the Private Chain.</p>
+        </div>
+      )}
+
       {credLoading && queriedDID && (
         <Card>
           <Skeleton className="h-4 w-32 mb-4" />
@@ -645,20 +694,20 @@ function AttestationsTab() {
           <div className="flex gap-3">
             <button
               onClick={() => switchVerifier("shared")}
-              className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+              className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors border ${
                 verifier === "shared"
-                  ? "bg-accent/10 text-accent"
-                  : "bg-muted text-muted-foreground hover:text-foreground"
+                  ? "bg-accent/10 text-accent border-accent/40"
+                  : "bg-muted text-muted-foreground border-transparent hover:text-foreground"
               }`}
             >
               Shared Anchor (Sepolia)
             </button>
             <button
               onClick={() => switchVerifier("trust")}
-              className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+              className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors border ${
                 verifier === "trust"
-                  ? "bg-accent/10 text-accent"
-                  : "bg-muted text-muted-foreground hover:text-foreground"
+                  ? "bg-accent/10 text-accent border-accent/40"
+                  : "bg-muted text-muted-foreground border-transparent hover:text-foreground"
               }`}
             >
               Trust Chain (Private 100100)
@@ -685,6 +734,15 @@ function AttestationsTab() {
           {inputError && <p className="text-xs text-danger">{inputError}</p>}
         </div>
       </Card>
+
+      {!queriedId && !isLoading && (
+        <div className="text-center py-8 text-muted-foreground">
+          <p className="text-sm">Enter an attestation ID (bytes32) to look up its on-chain record.</p>
+          <p className="text-xs mt-1">
+            Switch between Shared Anchor (Sepolia) and Trust Chain (Private) above.
+          </p>
+        </div>
+      )}
 
       {isLoading && queriedId && (
         <Card>

@@ -14,12 +14,57 @@ import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 
 function StatusDot({ ok }: { ok: boolean | undefined }) {
+  if (ok === undefined) {
+    return (
+      <span
+        role="status"
+        aria-label="Checking"
+        className="inline-block h-2.5 w-2.5 rounded-full bg-muted-foreground animate-pulse"
+      />
+    );
+  }
+  if (ok) {
+    return (
+      <span
+        role="status"
+        aria-label="Online"
+        className="inline-block h-2.5 w-2.5 rounded-full bg-success"
+      />
+    );
+  }
+  // Diamond shape for error — distinct from circle for colorblind users
   return (
     <span
-      className={`inline-block h-2.5 w-2.5 rounded-full ${
-        ok === undefined ? "bg-muted-foreground animate-pulse" : ok ? "bg-success" : "bg-danger"
-      }`}
+      role="status"
+      aria-label="Offline"
+      className="inline-block h-2.5 w-2.5 rotate-45 bg-danger"
     />
+  );
+}
+
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+
+  function handleCopy() {
+    navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  }
+
+  return (
+    <button
+      onClick={handleCopy}
+      title={copied ? "Copied!" : "Copy full address"}
+      className="text-muted-foreground hover:text-foreground transition-colors shrink-0"
+    >
+      {copied ? (
+        <span className="text-success text-xs">&#10003;</span>
+      ) : (
+        <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+        </svg>
+      )}
+    </button>
   );
 }
 
@@ -36,12 +81,6 @@ function ContractCard({
   chainLabel: string;
   explorerUrl?: string;
 }) {
-  const content = (
-    <span className="font-mono text-xs text-muted-foreground hover:text-accent transition-colors break-all">
-      {formatAddress(address)}
-    </span>
-  );
-
   return (
     <Card>
       <div className="flex items-center justify-between mb-1">
@@ -49,13 +88,23 @@ function ContractCard({
         <StatusDot ok={responsive} />
       </div>
       <div className="text-[10px] text-muted-foreground mb-2">{chainLabel}</div>
-      {explorerUrl ? (
-        <a href={explorerUrl} target="_blank" rel="noopener noreferrer">
-          {content}
-        </a>
-      ) : (
-        content
-      )}
+      <div className="flex items-center gap-2">
+        {explorerUrl ? (
+          <a
+            href={explorerUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-mono text-xs text-muted-foreground hover:text-accent transition-colors break-all"
+          >
+            {formatAddress(address)}
+          </a>
+        ) : (
+          <span className="font-mono text-xs text-muted-foreground break-all">
+            {formatAddress(address)}
+          </span>
+        )}
+        <CopyButton text={address} />
+      </div>
     </Card>
   );
 }
@@ -63,17 +112,19 @@ function ContractCard({
 export default function DashboardPage() {
   const { sepoliaContracts, privateContracts, isLoading } = useContractHealth();
   const { data: sepoliaBlock } = useBlockNumber({ watch: true });
-  const { data: privateBlock } = useBlockNumber({ chainId: privateChain.id, watch: true });
+  const { data: privateBlock } = useBlockNumber({ chainId: privateChain.id, query: { retry: 1, refetchInterval: false } });
   const [proverOk, setProverOk] = useState<boolean | undefined>(undefined);
   const [eaOk, setEaOk] = useState<boolean | undefined>(undefined);
+  const [lastPolled, setLastPolled] = useState<Date | null>(null);
 
   useEffect(() => {
-    fetchProverHealth().then(setProverOk);
-    fetchEAHealth().then(setEaOk);
-    const interval = setInterval(() => {
+    function poll() {
       fetchProverHealth().then(setProverOk);
       fetchEAHealth().then(setEaOk);
-    }, 15000);
+      setLastPolled(new Date());
+    }
+    poll();
+    const interval = setInterval(poll, 15000);
     return () => clearInterval(interval);
   }, []);
 
@@ -88,9 +139,16 @@ export default function DashboardPage() {
 
       {/* System status */}
       <Card>
-        <h2 className="text-sm font-semibold text-foreground mb-4">
-          System Status
-        </h2>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-sm font-semibold text-foreground">
+            System Status
+          </h2>
+          {lastPolled && (
+            <span className="text-[10px] text-muted-foreground">
+              Polled {lastPolled.toLocaleTimeString()} — every 15s
+            </span>
+          )}
+        </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="flex items-center gap-3">
             <StatusDot ok={sepoliaBlock !== undefined} />
@@ -106,7 +164,9 @@ export default function DashboardPage() {
             <div>
               <div className="text-sm text-foreground">Private Chain</div>
               <div className="text-xs text-muted-foreground">
-                {privateBlock ? `Block #${privateBlock.toString()}` : "Connecting..."}
+                {privateBlock
+                  ? `Block #${privateBlock.toString()}`
+                  : "Offline — start with docker compose up"}
               </div>
             </div>
           </div>
@@ -115,7 +175,7 @@ export default function DashboardPage() {
             <div>
               <div className="text-sm text-foreground">Prover API</div>
               <div className="text-xs text-muted-foreground">
-                {proverOk === undefined ? "Checking..." : proverOk ? "Port 8787" : "Offline"}
+                {proverOk === undefined ? "Checking..." : proverOk ? "Healthy (port 8787)" : "Offline"}
               </div>
             </div>
           </div>
@@ -124,7 +184,7 @@ export default function DashboardPage() {
             <div>
               <div className="text-sm text-foreground">External Adapter</div>
               <div className="text-xs text-muted-foreground">
-                {eaOk === undefined ? "Checking..." : eaOk ? "Port 8788" : "Offline"}
+                {eaOk === undefined ? "Checking..." : eaOk ? "Healthy (port 8788)" : "Offline"}
               </div>
             </div>
           </div>
@@ -306,10 +366,13 @@ export default function DashboardPage() {
               <dt className="text-muted-foreground">Consensus</dt>
               <dd className="text-foreground">IBFT 2.0 (4 validators)</dd>
             </div>
-            <div className="flex justify-between">
+            <div className="flex justify-between items-center">
               <dt className="text-muted-foreground">Admin</dt>
-              <dd className="font-mono text-xs text-foreground">
-                {formatAddress(PRIVATE_CHAIN_CONTRACTS.admin)}
+              <dd className="flex items-center gap-1.5">
+                <span className="font-mono text-xs text-foreground">
+                  {formatAddress(PRIVATE_CHAIN_CONTRACTS.admin)}
+                </span>
+                <CopyButton text={PRIVATE_CHAIN_CONTRACTS.admin} />
               </dd>
             </div>
           </dl>
