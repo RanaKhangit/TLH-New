@@ -38,12 +38,13 @@ contracts/broadcast/**/dry-run/
 
 # Private chain validator data (generated, local)
 private-chain/data/
+private-chain/chain-export.zip
 
 # Foundry dependencies (installed via forge install)
 contracts/lib/ccip/
 contracts/lib/chainlink-ccip/
 
-# Claude Code local settings
+# Local IDE settings
 .claude/
 
 # Log files
