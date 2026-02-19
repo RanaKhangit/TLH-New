@@ -47,6 +47,8 @@ function DIDExplorerSkeleton() {
 function DIDExplorerContent() {
   const searchParams = useSearchParams();
 
+  useEffect(() => { document.title = "DID Explorer | Trust Layer Health"; }, []);
+
   const [input, setInput] = useState("");
   const [hashMode, setHashMode] = useState(true);
   const [queriedDID, setQueriedDID] = useState<`0x${string}` | undefined>();

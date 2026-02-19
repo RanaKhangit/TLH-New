@@ -71,6 +71,8 @@ function ExplorerContent() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<Tab>("did");
 
+  useEffect(() => { document.title = "Explorer | Trust Layer Health"; }, []);
+
   // Accept tab from URL (e.g. /explorer?tab=attestations)
   useEffect(() => {
     const tab = searchParams.get("tab");
@@ -153,7 +155,10 @@ function DIDTab() {
 
   function handleResolve() {
     setInputError(null);
-    if (!input.trim()) return;
+    if (!input.trim()) {
+      setInputError("Please enter a DID to resolve.");
+      return;
+    }
     if (hashMode) {
       setQueriedDID(toBytes32(input.trim()));
     } else {
@@ -404,8 +409,18 @@ function CredentialsTab() {
   const { data: anchor, isLoading: anchorLoading, error: anchorError } =
     useGetAnchor(anchorDID, anchorType);
 
+  const [credError2, setCredError2] = useState<string | null>(null);
+
   function handleQuery() {
-    if (!didInput.trim() || !predInput.trim()) return;
+    setCredError2(null);
+    if (!didInput.trim()) {
+      setCredError2("Please enter a Subject DID.");
+      return;
+    }
+    if (!predInput.trim()) {
+      setCredError2("Please enter a Predicate Type.");
+      return;
+    }
     const did = hashMode ? toBytes32(didInput.trim()) : (didInput.trim() as `0x${string}`);
     const pred = hashMode ? toBytes32(predInput.trim()) : (predInput.trim() as `0x${string}`);
     setQueriedDID(did);
@@ -448,7 +463,7 @@ function CredentialsTab() {
               <input
                 type="text"
                 value={didInput}
-                onChange={(e) => setDidInput(e.target.value)}
+                onChange={(e) => { setDidInput(e.target.value); setCredError2(null); }}
                 placeholder="did:tlh:clinician-789"
                 className="w-full rounded-lg border border-border bg-muted px-3 py-2 text-sm text-foreground font-mono placeholder:text-muted-foreground"
                 onKeyDown={(e) => e.key === "Enter" && handleQuery()}
@@ -466,13 +481,25 @@ function CredentialsTab() {
               />
             </div>
           </div>
+          <div className="flex gap-2">
+            {DEMO_DIDS.map((d) => (
+              <button
+                key={d.value}
+                onClick={() => { setDidInput(d.value); setHashMode(true); setCredError2(null); }}
+                className="rounded-md bg-muted px-2 py-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+              >
+                {d.label}
+              </button>
+            ))}
+          </div>
           <button
             onClick={handleQuery}
-            disabled={credLoading || !didInput.trim()}
+            disabled={credLoading}
             className="rounded-lg bg-accent px-4 py-2 text-xs font-bold text-accent-foreground hover:bg-accent/80 transition-colors disabled:opacity-50"
           >
             {credLoading ? "Loading..." : "Get Credential"}
           </button>
+          {credError2 && <p className="text-xs text-danger">{credError2}</p>}
         </div>
       </Card>
 
@@ -580,7 +607,8 @@ function CredentialsTab() {
                 type="text"
                 value={didInput}
                 disabled
-                className="w-full rounded-lg border border-border bg-muted/50 px-3 py-2 text-sm text-muted-foreground font-mono"
+                placeholder="Fill Subject DID above first"
+                className="w-full rounded-lg border border-border bg-muted/50 px-3 py-2 text-sm text-muted-foreground font-mono placeholder:text-muted-foreground/50"
               />
             </div>
             <div>
@@ -671,7 +699,10 @@ function AttestationsTab() {
 
   function handleLookup() {
     setInputError(null);
-    if (!input.trim()) return;
+    if (!input.trim()) {
+      setInputError("Please enter an attestation ID (bytes32).");
+      return;
+    }
     if (isValidBytes32(input.trim())) {
       setQueriedId(input.trim() as `0x${string}`);
     } else {

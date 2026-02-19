@@ -54,13 +54,14 @@ function CopyButton({ text }: { text: string }) {
   return (
     <button
       onClick={handleCopy}
+      aria-label="Copy full address"
       title={copied ? "Copied!" : "Copy full address"}
       className="text-muted-foreground hover:text-foreground transition-colors shrink-0"
     >
       {copied ? (
         <span className="text-success text-xs">&#10003;</span>
       ) : (
-        <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
           <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
         </svg>
       )}
@@ -302,7 +303,7 @@ export default function DashboardPage() {
           ))}
         </div>
         <p className="text-xs text-muted-foreground mt-3">
-          Jobs defined in <code className="text-accent">chainlink-node/jobs/</code>
+          Jobs defined in <code className="font-mono text-foreground bg-muted px-1 py-0.5 rounded text-[11px]">chainlink-node/jobs/</code>
         </p>
       </Card>
 

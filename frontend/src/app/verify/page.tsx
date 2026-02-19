@@ -42,6 +42,8 @@ function VerifyPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
+  useEffect(() => { document.title = "Verify Credential | Trust Layer Health"; }, []);
+
   const [doctors, setDoctors] = useState<DoctorEntry[]>([]);
   const [doctorsLoading, setDoctorsLoading] = useState(true);
   const [pipeline, setPipeline] = useState<PipelineResult | null>(null);
@@ -277,6 +279,9 @@ function VerifyPageContent() {
                   </dt>
                   <dd className="font-mono text-xs text-foreground bg-muted p-2 rounded break-all">
                     {pipeline.data.privateTxHash}
+                    <span className="block text-[10px] text-muted-foreground mt-1">
+                      Private chain — no public block explorer available
+                    </span>
                   </dd>
                 </div>
               )}
