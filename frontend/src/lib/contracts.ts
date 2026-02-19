@@ -57,9 +57,9 @@ export const PRIVATE_CHAIN_CONTRACTS = {
   network: "TLH Private Chain",
   admin: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266" as `0x${string}`,
   CredentialRegistry: {
-    proxy: "0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9" as `0x${string}`,
+    proxy: "0x9A9f2CCfdE556A7E9Ff0848998Aa4a0CFD8863AE" as `0x${string}`,
   },
   TrustAttestationVerifier: {
-    proxy: "0x0165878A594ca255338adfa4d48449f69242Eb8F" as `0x${string}`,
+    proxy: "0x68B1D87F95878fE05B998F19b66F4baba5De1aed" as `0x${string}`,
   },
 } as const;
