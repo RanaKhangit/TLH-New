@@ -71,10 +71,16 @@ abstract contract BaseAttestationVerifier is Initializable, AccessControlUpgrade
     // -------------------------
     // Signer management
     // -------------------------
+    /// @notice Check whether an address is a whitelisted signer.
+    function isSigner(address addr) external view returns (bool) {
+        return signerWhitelist[addr];
+    }
+
     /// @notice Whitelist a signer address for attestation verification.
     /// @param signer Address to add to the signer whitelist.
     function addSigner(address signer) external onlyRole(SIGNER_ADMIN_ROLE) {
         if (signer == address(0)) revert InvalidSigner(signer);
+        if (signerWhitelist[signer]) return; // L-3: idempotent — no-op if already added
         signerWhitelist[signer] = true;
         emit SignerAdded(signer);
     }
@@ -83,6 +89,7 @@ abstract contract BaseAttestationVerifier is Initializable, AccessControlUpgrade
     /// @param signer Address to remove from the signer whitelist.
     function removeSigner(address signer) external onlyRole(SIGNER_ADMIN_ROLE) {
         if (signer == address(0)) revert InvalidSigner(signer);
+        if (!signerWhitelist[signer]) return; // L-3: idempotent — no-op if already removed
         signerWhitelist[signer] = false;
         emit SignerRemoved(signer);
     }
@@ -117,8 +124,9 @@ abstract contract BaseAttestationVerifier is Initializable, AccessControlUpgrade
         }
 
         // Chain-bound digest per ADR-002 §D: domain + chainid + contract address + payload.
+        // M-12: Use abi.encode (not encodePacked) to prevent hash collision risk.
         bytes32 digest = keccak256(
-                abi.encodePacked(
+                abi.encode(
                     DOMAIN, block.chainid, address(this), attestationId, subjectDID, keccak256(predicateData)
                 )
             ).toEthSignedMessageHash();

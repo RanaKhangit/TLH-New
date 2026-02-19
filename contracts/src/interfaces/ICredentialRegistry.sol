@@ -17,4 +17,11 @@ interface ICredentialRegistry {
         uint256 expiresAt,
         bytes32 attestationId
     ) external;
+
+    /// @notice Check whether a credential is currently valid.
+    function isCredentialValid(bytes32 subjectDID, bytes32 predicateType) external view returns (bool);
+
+    /// @notice Get credential validity and expiry data for cross-chain messaging.
+    function getCredentialInfo(bytes32 subjectDID, bytes32 predicateType)
+        external view returns (bool valid, uint256 expiresAt);
 }

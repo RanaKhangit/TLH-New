@@ -58,7 +58,7 @@ contract BaseAttestationVerifierTest is Test {
         returns (bytes memory)
     {
         bytes32 digest = keccak256(
-                abi.encodePacked(
+                abi.encode(
                     "TLH_ATTESTATION_V1", block.chainid, address(h), attestationId, subjectDID, keccak256(predicateData)
                 )
             ).toEthSignedMessageHash();
@@ -146,7 +146,7 @@ contract BaseAttestationVerifierTest is Test {
         bytes memory predicate = _buildPredicate(true, block.timestamp, block.timestamp + 1 days);
 
         bytes32 digest = keccak256(
-                abi.encodePacked("TLH_ATTESTATION_V1", block.chainid, address(h), attId, did, keccak256(predicate))
+                abi.encode("TLH_ATTESTATION_V1", block.chainid, address(h), attId, did, keccak256(predicate))
             ).toEthSignedMessageHash();
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(badSk, digest);
         bytes memory sig = abi.encodePacked(r, s, v);

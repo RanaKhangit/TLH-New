@@ -111,7 +111,7 @@ contract CredentialRegistryTest is Test {
         registry.writeCredential(DID1, PRED_GMC, true, block.timestamp + 365 days, ATT_ID1);
     }
 
-    function testWriteCredentialPreservesRevokedStatus() public {
+    function testWriteCredentialRevertsOnRevokedStatus() public {
         vm.startPrank(verifierAddr);
         registry.writeCredential(DID1, PRED_GMC, true, block.timestamp + 365 days, ATT_ID1);
         vm.stopPrank();
@@ -120,11 +120,10 @@ contract CredentialRegistryTest is Test {
         vm.prank(admin);
         registry.revokeCredential(DID1, PRED_GMC);
 
-        // Verifier writes again — revoked status must be preserved
+        // Verifier writes again — should revert because credential is revoked (H-7)
+        vm.expectRevert(abi.encodeWithSelector(CredentialRegistry.CredentialAlreadyRevoked.selector, DID1, PRED_GMC));
         vm.prank(verifierAddr);
         registry.writeCredential(DID1, PRED_GMC, true, block.timestamp + 365 days, ATT_ID2);
-
-        assertFalse(registry.isCredentialValid(DID1, PRED_GMC));
     }
 
     // ---- getCredential ----

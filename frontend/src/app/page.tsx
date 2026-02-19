@@ -47,10 +47,14 @@ function StatusDot({ ok }: { ok: boolean | undefined }) {
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
 
-  function handleCopy() {
-    navigator.clipboard.writeText(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
+  async function handleCopy() {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      /* clipboard not available */
+    }
   }
 
   return (

@@ -1,8 +1,29 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const EA_API = process.env.EA_URL || process.env.NEXT_PUBLIC_EA_URL || "http://localhost:8788";
+const EA_API = process.env.EA_URL || "http://localhost:8788";
+
+// --- Rate limiting ---
+const rateLimitMap = new Map<string, number[]>();
+const RATE_LIMIT_WINDOW = 60_000;
+const RATE_LIMIT_MAX = 5;
+
+function isRateLimited(ip: string): boolean {
+  const now = Date.now();
+  const timestamps = (rateLimitMap.get(ip) || []).filter(t => now - t < RATE_LIMIT_WINDOW);
+  if (timestamps.length >= RATE_LIMIT_MAX) return true;
+  timestamps.push(now);
+  rateLimitMap.set(ip, timestamps);
+  return false;
+}
+
+const SAFE_STRING = /^[a-zA-Z0-9\s\-_:.]{1,200}$/;
 
 export async function POST(req: NextRequest) {
+  const ip = req.headers.get("x-forwarded-for") || "unknown";
+  if (isRateLimited(ip)) {
+    return NextResponse.json({ error: "Too many requests" }, { status: 429 });
+  }
+
   let body: Record<string, unknown>;
   try {
     body = await req.json();
@@ -18,6 +39,17 @@ export async function POST(req: NextRequest) {
     surname?: string;
     givenName?: string;
   };
+
+  // Input validation
+  if (clinicianDID && !SAFE_STRING.test(clinicianDID)) {
+    return NextResponse.json({ error: "Invalid clinicianDID format" }, { status: 400 });
+  }
+  if (surname && !SAFE_STRING.test(surname)) {
+    return NextResponse.json({ error: "Invalid surname format" }, { status: 400 });
+  }
+  if (givenName && !SAFE_STRING.test(givenName)) {
+    return NextResponse.json({ error: "Invalid givenName format" }, { status: 400 });
+  }
 
   const eaPayload = {
     id: `pipeline-${Date.now()}`,
@@ -45,9 +77,8 @@ export async function POST(req: NextRequest) {
   }
 
   if (!eaRes.ok) {
-    const text = await eaRes.text().catch(() => "");
     return NextResponse.json(
-      { error: `EA returned ${eaRes.status}`, details: text },
+      { error: "Pipeline request failed" },
       { status: eaRes.status }
     );
   }

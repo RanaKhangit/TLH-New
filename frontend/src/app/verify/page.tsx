@@ -47,14 +47,23 @@ function VerifyPageContent() {
 
   useEffect(() => { document.title = "Verify Credential | Trust Layer Health"; }, []);
 
-  // Restore pipeline result from URL search params on mount
-  const initialAttestationId = searchParams.get("attestationId");
-  const initialTxHash = searchParams.get("txHash");
-  const initialProofId = searchParams.get("proofId");
-  const initialResult = searchParams.get("result");
-  const initialPrivateTxHash = searchParams.get("privateTxHash");
-  const initialDoctorIndex = searchParams.get("doctor");
-  const initialDid = searchParams.get("did");
+  // Restore pipeline result from URL search params on mount (validated)
+  const HEX_RE = /^0x[0-9a-fA-F]+$/;
+  const rawAttId = searchParams.get("attestationId");
+  const rawTxHash = searchParams.get("txHash");
+  const rawProofId = searchParams.get("proofId");
+  const rawResult = searchParams.get("result");
+  const rawPrivateTxHash = searchParams.get("privateTxHash");
+  const rawDoctorIndex = searchParams.get("doctor");
+  const rawDid = searchParams.get("did");
+
+  const initialAttestationId = rawAttId && HEX_RE.test(rawAttId) ? rawAttId : null;
+  const initialTxHash = rawTxHash && HEX_RE.test(rawTxHash) ? rawTxHash : null;
+  const initialProofId = rawProofId && /^[0-9a-fA-F]+$/.test(rawProofId) ? rawProofId : null;
+  const initialResult = rawResult === "PASS" || rawResult === "FAIL" ? rawResult : null;
+  const initialPrivateTxHash = rawPrivateTxHash && HEX_RE.test(rawPrivateTxHash) ? rawPrivateTxHash : null;
+  const initialDoctorIndex = rawDoctorIndex && /^\d+$/.test(rawDoctorIndex) ? rawDoctorIndex : null;
+  const initialDid = rawDid && /^did:[a-z]+:[a-zA-Z0-9._:-]+$/.test(rawDid) ? rawDid : null;
 
   const [doctors, setDoctors] = useState<DoctorEntry[]>([]);
   const [doctorsLoading, setDoctorsLoading] = useState(true);

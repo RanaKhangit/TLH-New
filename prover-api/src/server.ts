@@ -19,9 +19,14 @@ const REPO_ROOT = path.join(process.cwd(), "..")
 const ATTESTATION_PATH = path.join(REPO_ROOT, "json-encoded-attestation.json")
 const DECODED_DATA_PATH = path.join(REPO_ROOT, "decoded-attested-data.json")
 
-// Deterministic prover keypair for DECO attestation generation.
-// In production this would be the TLSNotary's signing key.
-const PROVER_PRIV_HEX = keccak256(toHex("TLH_DECO_PROVER_V1")).slice(2)
+// Prover keypair for DECO attestation generation.
+const PROVER_PRIV_HEX = (() => {
+  const envKey = process.env.PROVER_PRIVATE_KEY
+  if (envKey) return envKey.startsWith("0x") ? envKey.slice(2) : envKey
+  // DEVELOPMENT ONLY fallback — set PROVER_PRIVATE_KEY env var for production
+  console.warn("[SECURITY] Using deterministic dev key — set PROVER_PRIVATE_KEY for production")
+  return keccak256(toHex("TLH_DECO_PROVER_V1")).slice(2)
+})()
 const PROVER_PUB_UNCOMPRESSED = secp256k1.getPublicKey(PROVER_PRIV_HEX, false)
 
 type Store = {
@@ -72,7 +77,9 @@ function ensureStore(): Store {
 }
 
 function saveStore(store: Store) {
-  fs.writeFileSync(STORE_PATH, JSON.stringify(store, null, 2))
+  const tmpPath = STORE_PATH + ".tmp"
+  fs.writeFileSync(tmpPath, JSON.stringify(store, null, 2))
+  fs.renameSync(tmpPath, STORE_PATH)
 }
 
 function newSaltHex(): string {
@@ -212,15 +219,43 @@ function lookupDoctor(surname: string, givenName: string) {
   }
 }
 
+// --- Security middleware ---
+const PROVER_API_KEY = process.env.PROVER_API_KEY || ""
+const PROVER_ALLOWED_ORIGINS = (process.env.CORS_ORIGINS || "http://localhost:3000").split(",")
+
+const proverRateLimitMap = new Map<string, number[]>()
+
+function proverAuthMiddleware(req: express.Request, res: express.Response, next: express.NextFunction) {
+  if (PROVER_API_KEY && req.headers["x-api-key"] !== PROVER_API_KEY) {
+    return res.status(401).json({ error: "Unauthorized" })
+  }
+  next()
+}
+
+function proverRateLimitMiddleware(req: express.Request, res: express.Response, next: express.NextFunction) {
+  const ip = req.ip || req.socket.remoteAddress || "unknown"
+  const now = Date.now()
+  const timestamps = (proverRateLimitMap.get(ip) || []).filter(t => now - t < 60_000)
+  if (timestamps.length >= 20) {
+    return res.status(429).json({ error: "Too many requests" })
+  }
+  timestamps.push(now)
+  proverRateLimitMap.set(ip, timestamps)
+  next()
+}
+
 const app = express()
 app.use((_req, res, next) => {
-  res.header("Access-Control-Allow-Origin", "*")
-  res.header("Access-Control-Allow-Headers", "Content-Type")
+  const origin = _req.headers.origin
+  if (origin && PROVER_ALLOWED_ORIGINS.includes(origin)) {
+    res.header("Access-Control-Allow-Origin", origin)
+  }
+  res.header("Access-Control-Allow-Headers", "Content-Type, X-API-Key")
   res.header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
   if (_req.method === "OPTIONS") return res.sendStatus(204)
   next()
 })
-app.use(express.json({ limit: "10mb" }))
+app.use(express.json({ limit: "256kb" }))
 
 // --- Schemas ---
 const RegisterDoctorSchema = z.object({
@@ -360,7 +395,7 @@ app.get("/deco/verify", (req, res) => {
  * Alternative POST endpoint that accepts attestation in request body
  * Useful if attestation is passed directly rather than read from file
  */
-app.post("/deco/verify", (req, res) => {
+app.post("/deco/verify", proverAuthMiddleware, proverRateLimitMiddleware, (req, res) => {
   console.log("[DECO] POST Verification request received")
 
   const { attestation, decodedData } = req.body
@@ -370,6 +405,28 @@ app.post("/deco/verify", (req, res) => {
       result: "FAIL",
       reason: "Missing attestation or decodedData in request body",
       inquiryId: "",
+      timestamp: new Date().toISOString(),
+    })
+  }
+
+  // Validate attestation structure
+  if (
+    typeof attestation.data_hex !== "string" ||
+    typeof attestation.signature_hex !== "string" ||
+    typeof attestation.public_key_hex !== "string"
+  ) {
+    return res.status(400).json({
+      result: "FAIL",
+      reason: "Invalid attestation structure",
+      timestamp: new Date().toISOString(),
+    })
+  }
+
+  // Validate decodedData structure
+  if (!Array.isArray(decodedData.success)) {
+    return res.status(400).json({
+      result: "FAIL",
+      reason: "Invalid decodedData structure",
       timestamp: new Date().toISOString(),
     })
   }
@@ -413,7 +470,7 @@ app.post("/deco/verify", (req, res) => {
 })
 
 // --- Original Routes ---
-app.post("/doctor/register", (req, res) => {
+app.post("/doctor/register", proverAuthMiddleware, proverRateLimitMiddleware, (req, res) => {
   const parsed = RegisterDoctorSchema.safeParse(req.body)
   if (!parsed.success) return res.status(400).json(parsed.error.format())
 
@@ -435,7 +492,7 @@ app.post("/doctor/register", (req, res) => {
   return res.json({ doctorCommitment })
 })
 
-app.post("/doctor/link-inquiry", (req, res) => {
+app.post("/doctor/link-inquiry", proverAuthMiddleware, proverRateLimitMiddleware, (req, res) => {
   const parsed = LinkInquirySchema.safeParse(req.body)
   if (!parsed.success) return res.status(400).json(parsed.error.format())
 
@@ -451,7 +508,7 @@ app.post("/doctor/link-inquiry", (req, res) => {
   return res.json({ ok: true })
 })
 
-app.post("/deco/ingest-attestation", (req, res) => {
+app.post("/deco/ingest-attestation", proverAuthMiddleware, proverRateLimitMiddleware, (req, res) => {
   const parsed = IngestSchema.safeParse(req.body)
   if (!parsed.success) return res.status(400).json(parsed.error.format())
 

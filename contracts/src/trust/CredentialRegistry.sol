@@ -66,8 +66,7 @@ contract CredentialRegistry is Initializable, AccessControlUpgradeable, UUPSUpgr
     }
 
     /// @notice Write or update a credential record for a subject.
-    /// @dev Status is set to Active at write-time (expiry is evaluated at read-time via _withLiveStatus).
-    ///      If the credential was previously Revoked, the revocation is preserved.
+    /// @dev Reverts if the credential has been revoked. Status set to Active at write-time.
     /// @param subjectDID DID of the credential subject.
     /// @param predicateType Predicate type identifier (e.g., keccak256("GMC_REGISTERED")).
     /// @param valid Whether the credential is currently valid.
@@ -83,16 +82,17 @@ contract CredentialRegistry is Initializable, AccessControlUpgradeable, UUPSUpgr
         if (!hasRole(VERIFIER_ROLE, msg.sender)) revert UnauthorizedCredentialWriter(msg.sender);
 
         Credential storage c = _credentials[subjectDID][predicateType];
+
+        // H-7: Prevent overwriting a revoked credential
+        if (c.status == CredentialStatus.Revoked) revert CredentialAlreadyRevoked(subjectDID, predicateType);
+
         c.subjectDID = subjectDID;
         c.predicateType = predicateType;
         c.valid = valid;
         c.checkedAt = block.timestamp;
         c.expiresAt = expiresAt;
         c.attestationId = attestationId;
-
-        if (c.status != CredentialStatus.Revoked) {
-            c.status = CredentialStatus.Active;
-        }
+        c.status = CredentialStatus.Active;
 
         if (!_predicateTypeSeen[subjectDID][predicateType]) {
             _predicateTypeSeen[subjectDID][predicateType] = true;
@@ -161,6 +161,35 @@ contract CredentialRegistry is Initializable, AccessControlUpgradeable, UUPSUpgr
     function grantVerifier(address verifier) external onlyRole(ADMIN_ROLE) {
         if (verifier == address(0)) revert InvalidVerifier(verifier);
         _grantRole(VERIFIER_ROLE, verifier);
+    }
+
+    /// @notice Get credential validity and expiry (for cross-chain messaging).
+    function getCredentialInfo(bytes32 subjectDID, bytes32 predicateType)
+        external view returns (bool valid, uint256 expiresAt)
+    {
+        Credential memory c = _credentials[subjectDID][predicateType];
+        if (c.subjectDID == bytes32(0)) return (false, 0);
+        Credential memory live = _withLiveStatus(c);
+        return (live.valid, live.expiresAt);
+    }
+
+    /// @notice Paginated credential retrieval to avoid unbounded gas.
+    /// @param subjectDID DID of the credential subject.
+    /// @param offset Start index in the predicate types array.
+    /// @param limit Maximum number of records to return.
+    function getCredentialsByDIDPaginated(bytes32 subjectDID, uint256 offset, uint256 limit)
+        external view returns (Credential[] memory)
+    {
+        bytes32[] memory types_ = _predicateTypesByDID[subjectDID];
+        if (offset >= types_.length) return new Credential[](0);
+        uint256 end = offset + limit;
+        if (end > types_.length) end = types_.length;
+        uint256 count = end - offset;
+        Credential[] memory out = new Credential[](count);
+        for (uint256 i = 0; i < count; i++) {
+            out[i] = _withLiveStatus(_credentials[subjectDID][types_[offset + i]]);
+        }
+        return out;
     }
 
     function _withLiveStatus(Credential memory c) internal view returns (Credential memory) {

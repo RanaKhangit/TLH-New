@@ -22,6 +22,7 @@ contract TrustAttestationVerifier is BaseAttestationVerifier, UUPSUpgradeable, I
     event CredentialWrittenViaAttestation(
         bytes32 indexed subjectDID, bytes32 indexed predicateType, bytes32 indexed attestationId
     );
+    event CredentialRegistryUpdated(address indexed oldRegistry, address indexed newRegistry);
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
@@ -87,7 +88,9 @@ contract TrustAttestationVerifier is BaseAttestationVerifier, UUPSUpgradeable, I
     /// @notice Update the credential registry address (admin only).
     function setCredentialRegistry(address credentialRegistry_) external onlyRole(ADMIN_ROLE) {
         if (credentialRegistry_ == address(0)) revert InvalidCredentialRegistry(credentialRegistry_);
+        address old = address(credentialRegistry);
         credentialRegistry = ICredentialRegistry(credentialRegistry_);
+        emit CredentialRegistryUpdated(old, credentialRegistry_);
     }
 
     function _authorizeUpgrade(address) internal override onlyRole(UPGRADER_ROLE) {}

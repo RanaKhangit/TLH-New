@@ -4,6 +4,7 @@ pragma solidity ^0.8.20;
 import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import {AccessControlUpgradeable} from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
 import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 import {CCIPTypes, ICCIPRouter} from "./CCIPTypes.sol";
 import {ICredentialRegistry} from "../interfaces/ICredentialRegistry.sol";
@@ -13,7 +14,7 @@ import {ITLHCCIPSender} from "../interfaces/ITLHCCIPSender.sol";
 /// @notice Reads credentials from a local CredentialRegistry and sends them
 ///         cross-chain via Chainlink CCIP to the anchor chain.
 /// @dev UUPS upgradeable. Pays CCIP fees in native ETH.
-contract TLHCCIPSender is Initializable, AccessControlUpgradeable, UUPSUpgradeable, ITLHCCIPSender {
+contract TLHCCIPSender is Initializable, AccessControlUpgradeable, UUPSUpgradeable, ReentrancyGuard, ITLHCCIPSender {
     // ── Roles ────────────────────────────────────────────────────────────
     bytes32 public constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
     bytes32 public constant UPGRADER_ROLE = keccak256("UPGRADER_ROLE");
@@ -45,6 +46,7 @@ contract TLHCCIPSender is Initializable, AccessControlUpgradeable, UUPSUpgradeab
     error InvalidAdmin(address admin);
     error InvalidRouter(address router);
     error InvalidRegistry(address registry);
+    error CredentialNotValid(bytes32 subjectDID, bytes32 predicateType);
 
     // ── Events ───────────────────────────────────────────────────────────
     event CredentialSent(
@@ -91,7 +93,7 @@ contract TLHCCIPSender is Initializable, AccessControlUpgradeable, UUPSUpgradeab
         uint64 destChainSelector,
         bytes32 subjectDID,
         bytes32 predicateType
-    ) external payable onlyRole(SENDER_ROLE) returns (bytes32 messageId) {
+    ) external payable onlyRole(SENDER_ROLE) nonReentrant returns (bytes32 messageId) {
         if (!allowedDestinations[destChainSelector]) revert DestinationNotAllowed(destChainSelector);
         address receiver = allowedReceivers[destChainSelector];
         if (receiver == address(0)) revert ReceiverNotSet(destChainSelector);
@@ -155,20 +157,25 @@ contract TLHCCIPSender is Initializable, AccessControlUpgradeable, UUPSUpgradeab
     }
 
     // ── Internal: build CCIP message ────────────────────────────────────
+    /// @dev C-5 fix: Reads actual credential data from CredentialRegistry instead of fabricating values.
     function _buildMessage(
         address receiver,
         bytes32 subjectDID,
         bytes32 predicateType,
         uint256 nonce
     ) internal view returns (CCIPTypes.EVM2AnyMessage memory) {
+        // Read real credential state from the registry
+        (bool valid, uint256 expiresAt) = credentialRegistry.getCredentialInfo(subjectDID, predicateType);
+        if (!valid) revert CredentialNotValid(subjectDID, predicateType);
+
         bytes memory payload = abi.encode(
             PROTOCOL_VERSION,
             nonce,
             subjectDID,
             predicateType,
-            true,
-            block.timestamp + 365 days,
-            keccak256(abi.encodePacked(subjectDID, predicateType, nonce))
+            valid,
+            expiresAt,
+            keccak256(abi.encode(subjectDID, predicateType, nonce))
         );
 
         return CCIPTypes.EVM2AnyMessage({
@@ -178,6 +185,17 @@ contract TLHCCIPSender is Initializable, AccessControlUpgradeable, UUPSUpgradeab
             feeToken: address(0),
             extraArgs: CCIPTypes._argsToBytes(CCIPTypes.EVMExtraArgsV1({gasLimit: CCIP_GAS_LIMIT}))
         });
+    }
+
+    // ── ETH recovery ────────────────────────────────────────────────────
+    /// @notice Accept ETH (e.g. CCIP refunds).
+    receive() external payable {}
+
+    /// @notice Withdraw accumulated ETH to admin.
+    function withdrawETH(address payable to) external onlyRole(ADMIN_ROLE) {
+        uint256 balance = address(this).balance;
+        (bool ok,) = to.call{value: balance}("");
+        require(ok, "withdraw failed");
     }
 
     // ── UUPS authorization ───────────────────────────────────────────────

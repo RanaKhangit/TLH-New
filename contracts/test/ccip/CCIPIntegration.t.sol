@@ -86,6 +86,14 @@ contract CCIPIntegrationTest is Test {
         destRegistry.grantVerifier(address(receiver));
         vm.stopPrank();
 
+        // C-5: Sender now reads credentials from source registry — seed valid credentials
+        vm.startPrank(admin);
+        sourceRegistry.grantVerifier(address(this));
+        vm.stopPrank();
+        sourceRegistry.writeCredential(DID1, PRED_GMC, true, block.timestamp + 365 days, keccak256("seed-1"));
+        sourceRegistry.writeCredential(DID1, PRED_BLS, true, block.timestamp + 365 days, keccak256("seed-2"));
+        sourceRegistry.writeCredential(DID2, PRED_GMC, true, block.timestamp + 365 days, keccak256("seed-3"));
+
         // Fund
         vm.deal(senderRole, 10 ether);
     }

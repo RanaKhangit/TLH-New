@@ -105,7 +105,7 @@ contract E2ELifecycleTest is Test {
         returns (bytes memory)
     {
         bytes32 digest = keccak256(
-            abi.encodePacked(
+            abi.encode(
                 "TLH_ATTESTATION_V1", block.chainid, address(sharedVerifier), attestationId, subjectDID, keccak256(predicateData)
             )
         ).toEthSignedMessageHash();
@@ -118,7 +118,7 @@ contract E2ELifecycleTest is Test {
         returns (bytes memory)
     {
         bytes32 digest = keccak256(
-            abi.encodePacked(
+            abi.encode(
                 "TLH_ATTESTATION_V1", block.chainid, address(trustVerifier), attestationId, subjectDID, keccak256(predicateData)
             )
         ).toEthSignedMessageHash();

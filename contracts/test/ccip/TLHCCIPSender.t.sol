@@ -57,6 +57,11 @@ contract TLHCCIPSenderTest is Test {
         vm.deal(senderRole, 10 ether);
         vm.deal(admin, 10 ether);
         vm.deal(stranger, 10 ether);
+
+        // C-5: Sender now reads credentials from registry — seed a valid credential
+        vm.prank(admin);
+        registry.grantVerifier(address(this));
+        registry.writeCredential(DID1, PRED_GMC, true, block.timestamp + 365 days, keccak256("seed-att"));
     }
 
     // ---- initialization ----
@@ -135,7 +140,7 @@ contract TLHCCIPSenderTest is Test {
         assertEq(subjectDID, DID1);
         assertEq(predicateType, PRED_GMC);
         assertTrue(valid);
-        assertEq(attestationId, keccak256(abi.encodePacked(DID1, PRED_GMC, uint256(0))));
+        assertEq(attestationId, keccak256(abi.encode(DID1, PRED_GMC, uint256(0))));
     }
 
     // ---- nonce management ----

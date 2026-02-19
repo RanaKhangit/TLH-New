@@ -73,7 +73,7 @@ contract AttestationVerifierTest is Test {
         returns (bytes memory)
     {
         bytes32 digest = keccak256(
-                abi.encodePacked(
+                abi.encode(
                     "TLH_ATTESTATION_V1",
                     block.chainid,
                     address(verifier),

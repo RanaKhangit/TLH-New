@@ -14,9 +14,12 @@ contract VCHashAnchors is Initializable, UUPSUpgradeable, AccessControlUpgradeab
     bytes32 public constant UPGRADER_ROLE = keccak256("UPGRADER_ROLE");
     bytes32 public constant ANCHOR_WRITER_ROLE = keccak256("ANCHOR_WRITER_ROLE");
 
+    uint256 public constant MAX_ANCHOR_HISTORY = 1000;
+
     error UnauthorizedAnchorWriter(address caller);
     error AnchorNotFound(bytes32 subjectDID, bytes32 vcType);
     error AnchorAlreadyRevoked(bytes32 subjectDID, bytes32 vcType);
+    error AnchorHistoryFull(bytes32 subjectDID, bytes32 vcType);
     error ZeroAdminAddress();
 
     /// @custom:oz-upgrades-unsafe-allow constructor
@@ -59,6 +62,11 @@ contract VCHashAnchors is Initializable, UUPSUpgradeable, AccessControlUpgradeab
         AnchorRecord storage rec = anchors[subjectDID][vcType];
         if (rec.revoked) revert AnchorAlreadyRevoked(subjectDID, vcType);
 
+        // H-8: Cap history length to prevent unbounded gas
+        if (anchorHistory[subjectDID][vcType].length >= MAX_ANCHOR_HISTORY) {
+            revert AnchorHistoryFull(subjectDID, vcType);
+        }
+
         rec.contentHash = contentHash;
         rec.anchoredAt = block.timestamp;
 
@@ -81,6 +89,22 @@ contract VCHashAnchors is Initializable, UUPSUpgradeable, AccessControlUpgradeab
     /// @notice Get full hash history for (subjectDID, vcType).
     function getAnchorHistory(bytes32 subjectDID, bytes32 vcType) external view returns (bytes32[] memory) {
         return anchorHistory[subjectDID][vcType];
+    }
+
+    /// @notice Get paginated hash history to avoid unbounded gas.
+    function getAnchorHistoryPaginated(bytes32 subjectDID, bytes32 vcType, uint256 offset, uint256 limit)
+        external view returns (bytes32[] memory)
+    {
+        bytes32[] storage history = anchorHistory[subjectDID][vcType];
+        if (offset >= history.length) return new bytes32[](0);
+        uint256 end = offset + limit;
+        if (end > history.length) end = history.length;
+        uint256 count = end - offset;
+        bytes32[] memory out = new bytes32[](count);
+        for (uint256 i = 0; i < count; i++) {
+            out[i] = history[offset + i];
+        }
+        return out;
     }
 
     /// @notice Revoke the latest anchor for (subjectDID, vcType).

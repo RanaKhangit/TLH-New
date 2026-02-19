@@ -62,6 +62,7 @@ contract TLHCCIPReceiver is
 
     event SourceChainConfigured(uint64 indexed sourceChainSelector, bool enabled);
     event SenderConfigured(uint64 indexed sourceChainSelector, address indexed sender, bool enabled);
+    event NonceAdvanced(uint64 indexed sourceChainSelector, uint256 oldNonce, uint256 newNonce);
 
     // ── Constructor (UUPS) ───────────────────────────────────────────────
     /// @custom:oz-upgrades-unsafe-allow constructor
@@ -96,15 +97,15 @@ contract TLHCCIPReceiver is
     }
 
     // ── ERC-165 ──────────────────────────────────────────────────────────
-    /// @notice Indicates support for ICCIPReceiver and ERC-165.
+    /// @notice Indicates support for ICCIPReceiver, AccessControl, and ERC-165.
     function supportsInterface(bytes4 interfaceId)
         public
-        pure
+        view
         override(AccessControlUpgradeable)
         returns (bool)
     {
         return interfaceId == type(ICCIPReceiver).interfaceId
-            || interfaceId == 0x01ffc9a7; // IERC165
+            || super.supportsInterface(interfaceId);
     }
 
     // ── Views ────────────────────────────────────────────────────────────
@@ -148,6 +149,14 @@ contract TLHCCIPReceiver is
     ) external onlyRole(ADMIN_ROLE) {
         allowedSenders[sourceChainSelector][sender] = enabled;
         emit SenderConfigured(sourceChainSelector, sender, enabled);
+    }
+
+    /// @notice Admin can advance the nonce to skip stuck messages (L-7).
+    function advanceNonce(uint64 sourceChainSelector, uint256 newNonce) external onlyRole(ADMIN_ROLE) {
+        uint256 current = _lastNonce[sourceChainSelector];
+        require(newNonce > current, "nonce must advance");
+        _lastNonce[sourceChainSelector] = newNonce;
+        emit NonceAdvanced(sourceChainSelector, current, newNonce);
     }
 
     // ── Internal: process CCIP message ───────────────────────────────────

@@ -95,14 +95,18 @@ function ExplorerContent() {
           </p>
         </div>
         <button
-          onClick={() => {
+          onClick={async () => {
             const all = [
               ...Object.entries(CONTRACTS).filter(([, v]) => typeof v === "object" && "proxy" in v).map(([k, v]) => `${k}: ${(v as { proxy: string }).proxy}`),
               ...Object.entries(CCIP_CONTRACTS).map(([k, v]) => `${k}: ${v.proxy}`),
               ...Object.entries(PRIVATE_CHAIN_CONTRACTS).filter(([, v]) => typeof v === "object" && "proxy" in v).map(([k, v]) => `${k}: ${(v as { proxy: string }).proxy}`),
             ].join("\n");
-            navigator.clipboard.writeText(all);
-            toast.success("All contract addresses copied to clipboard");
+            try {
+              await navigator.clipboard.writeText(all);
+              toast.success("All contract addresses copied to clipboard");
+            } catch {
+              toast.error("Failed to copy to clipboard");
+            }
           }}
           className="rounded-lg bg-muted px-4 py-2 text-sm font-medium text-foreground hover:bg-muted/80 transition-colors shrink-0"
         >
@@ -147,8 +151,15 @@ function useRecentDIDs() {
   useEffect(() => {
     try {
       const stored = localStorage.getItem("tlh-recent-dids");
-      if (stored) setRecent(JSON.parse(stored));
-    } catch { /* ignore */ }
+      if (stored) {
+        const parsed: unknown = JSON.parse(stored);
+        if (Array.isArray(parsed) && parsed.every((v) => typeof v === "string")) {
+          setRecent(parsed as string[]);
+        } else {
+          localStorage.removeItem("tlh-recent-dids");
+        }
+      }
+    } catch { localStorage.removeItem("tlh-recent-dids"); }
   }, []);
   function add(did: string) {
     setRecent((prev) => {
@@ -469,6 +480,14 @@ function CredentialsTab() {
     }
     const did = hashMode ? toBytes32(didInput.trim()) : (didInput.trim() as `0x${string}`);
     const pred = hashMode ? toBytes32(predInput.trim()) : (predInput.trim() as `0x${string}`);
+    if (!hashMode && !isValidBytes32(didInput.trim())) {
+      setCredError2("Invalid Subject DID — must be 0x followed by 64 hex characters.");
+      return;
+    }
+    if (!hashMode && !isValidBytes32(predInput.trim())) {
+      setCredError2("Invalid Predicate Type — must be 0x followed by 64 hex characters.");
+      return;
+    }
     setQueriedDID(did);
     setQueriedPred(pred);
   }
@@ -889,7 +908,7 @@ function AttestationsTab() {
       {error && !notFound && (
         <Card>
           <div className="rounded-lg bg-danger/10 border border-danger/20 p-3 text-sm text-danger">
-            Error: {error.message?.slice(0, 200)}
+            Failed to load attestation. Please check the ID and try again.
           </div>
         </Card>
       )}

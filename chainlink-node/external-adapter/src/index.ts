@@ -17,7 +17,6 @@ import {
   http,
   keccak256,
   encodeAbiParameters,
-  encodePacked,
   toHex,
   concat,
   defineChain,
@@ -76,10 +75,40 @@ const SUBMIT_ATTESTATION_ABI = [
 
 const DOMAIN = "TLH_ATTESTATION_V1"
 
+// --- Security middleware ---
+const EA_API_KEY = process.env.EA_API_KEY || ""
+const ALLOWED_ORIGINS = (process.env.CORS_ORIGINS || "http://localhost:3000").split(",")
+
+const rateLimitMap = new Map<string, number[]>()
+const RATE_LIMIT_WINDOW = 60_000
+const RATE_LIMIT_MAX = 10
+
+function rateLimitMiddleware(req: express.Request, res: express.Response, next: express.NextFunction) {
+  const ip = req.ip || req.socket.remoteAddress || "unknown"
+  const now = Date.now()
+  const timestamps = (rateLimitMap.get(ip) || []).filter(t => now - t < RATE_LIMIT_WINDOW)
+  if (timestamps.length >= RATE_LIMIT_MAX) {
+    return res.status(429).json({ error: "Too many requests" })
+  }
+  timestamps.push(now)
+  rateLimitMap.set(ip, timestamps)
+  next()
+}
+
+function authMiddleware(req: express.Request, res: express.Response, next: express.NextFunction) {
+  if (EA_API_KEY && req.headers["x-api-key"] !== EA_API_KEY) {
+    return res.status(401).json({ error: "Unauthorized" })
+  }
+  next()
+}
+
 const app = express()
 app.use((_req, res, next) => {
-  res.header("Access-Control-Allow-Origin", "*")
-  res.header("Access-Control-Allow-Headers", "Content-Type")
+  const origin = _req.headers.origin
+  if (origin && ALLOWED_ORIGINS.includes(origin)) {
+    res.header("Access-Control-Allow-Origin", origin)
+  }
+  res.header("Access-Control-Allow-Headers", "Content-Type, X-API-Key")
   res.header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
   if (_req.method === "OPTIONS") return res.sendStatus(204)
   next()
@@ -179,11 +208,19 @@ async function signAttestation(
   subjectDID: `0x${string}`,
   predicateData: `0x${string}`
 ): Promise<`0x${string}`> {
-  const packed = encodePacked(
-    ["string", "uint256", "address", "bytes32", "bytes32", "bytes32"],
+  // M-12: Use abi.encode (matching on-chain BaseAttestationVerifier) to prevent hash collision
+  const encoded = encodeAbiParameters(
+    [
+      { type: "string" },
+      { type: "uint256" },
+      { type: "address" },
+      { type: "bytes32" },
+      { type: "bytes32" },
+      { type: "bytes32" },
+    ],
     [DOMAIN, BigInt(chainId), contractAddress, attestationId, subjectDID, keccak256(predicateData)]
   )
-  const digest = keccak256(packed)
+  const digest = keccak256(encoded)
 
   // signMessage applies EIP-191 prefix which matches Solidity's toEthSignedMessageHash()
   const signature = await account.signMessage({ message: { raw: digest as `0x${string}` } })
@@ -197,7 +234,7 @@ async function signAttestation(
  *   1. Sepolia AttestationVerifier (shared anchor — DID + VCHash)
  *   2. Private Chain TrustAttestationVerifier (trust — credential write)
  */
-app.post("/", async (req, res) => {
+app.post("/", rateLimitMiddleware, authMiddleware, async (req, res) => {
   const request = req.body as ChainlinkRequest
   const jobRunID = request.id || "1"
 
@@ -293,12 +330,12 @@ app.post("/", async (req, res) => {
 
     return res.json(response)
   } catch (error) {
-    console.error(`[EA] Error:`, error)
+    console.error(`[EA] Error:`, error instanceof Error ? error.message.slice(0, 200) : "Unknown error")
 
     const response: ChainlinkResponse = {
       jobRunID,
       statusCode: 500,
-      error: error instanceof Error ? error.message : "Unknown error",
+      error: "Pipeline processing failed",
     }
 
     return res.status(500).json(response)
