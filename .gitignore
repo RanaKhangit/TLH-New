@@ -38,3 +38,17 @@ contracts/broadcast/**/dry-run/
 
 # Private chain validator data (generated, local)
 private-chain/data/
+
+# Foundry dependencies (installed via forge install)
+contracts/lib/ccip/
+contracts/lib/chainlink-ccip/
+
+# Claude Code local settings
+.claude/
+
+# Log files
+ea.log
+*.log
+
+# Word temp files
+~$*
