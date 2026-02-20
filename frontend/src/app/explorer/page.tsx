@@ -305,6 +305,30 @@ function DIDTab() {
         </Card>
       )}
 
+      {/* RPC connection error */}
+      {error && !notFound && queriedDID && !isLoading && (
+        <Card>
+          <div className="rounded-lg bg-danger/10 border border-danger/20 p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <Badge variant="danger">Connection Error</Badge>
+            </div>
+            <p className="text-sm text-danger mb-2">
+              Unable to connect to Sepolia RPC. The network may be unavailable or the request timed out.
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Error: {error.message?.slice(0, 100) || "Unknown error"}
+              {error.message && error.message.length > 100 && "..."}
+            </p>
+            <button
+              onClick={handleResolve}
+              className="mt-3 rounded-lg bg-muted px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted/80 transition-colors"
+            >
+              Retry
+            </button>
+          </div>
+        </Card>
+      )}
+
       {notFound && queriedDID && (
         <Card>
           <div className="text-center py-4">
@@ -312,6 +336,29 @@ function DIDTab() {
             <p className="text-sm text-muted-foreground mt-2">
               This DID is not registered in the DIDRegistry contract.
             </p>
+          </div>
+        </Card>
+      )}
+
+      {/* Catch-all: query finished but no data, no error, not loading - likely timeout */}
+      {queriedDID && !isLoading && !data && !error && !notFound && (
+        <Card>
+          <div className="rounded-lg bg-warning/10 border border-warning/20 p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <Badge variant="warning">Request Timeout</Badge>
+            </div>
+            <p className="text-sm text-warning mb-2">
+              The DID resolution request timed out. The Sepolia network may be congested.
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Try again or check your network connection.
+            </p>
+            <button
+              onClick={handleResolve}
+              className="mt-3 rounded-lg bg-muted px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted/80 transition-colors"
+            >
+              Retry
+            </button>
           </div>
         </Card>
       )}
@@ -529,8 +576,10 @@ function CredentialsTab() {
                 type="text"
                 value={didInput}
                 onChange={(e) => { setDidInput(e.target.value); setCredError2(null); }}
-                placeholder="did:tlh:clinician-789"
-                className="w-full rounded-lg border border-border bg-muted px-3 py-2 text-sm text-foreground font-mono placeholder:text-muted-foreground"
+                placeholder="Enter DID or click a quick-select below"
+                className={`w-full rounded-lg border px-3 py-2 text-sm font-mono placeholder:text-muted-foreground ${
+                  didInput ? "bg-muted text-foreground border-accent/40" : "bg-muted/50 text-foreground border-border"
+                }`}
                 onKeyDown={(e) => e.key === "Enter" && handleQuery()}
               />
             </div>
@@ -587,6 +636,30 @@ function CredentialsTab() {
         </Card>
       )}
 
+      {/* RPC connection error for credentials */}
+      {credError && !notFound && queriedDID && !credLoading && (
+        <Card>
+          <div className="rounded-lg bg-danger/10 border border-danger/20 p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <Badge variant="danger">Connection Error</Badge>
+            </div>
+            <p className="text-sm text-danger mb-2">
+              Unable to connect to Private Chain RPC. The network may be unavailable.
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Error: {credError.message?.slice(0, 100) || "Unknown error"}
+              {credError.message && credError.message.length > 100 && "..."}
+            </p>
+            <button
+              onClick={handleQuery}
+              className="mt-3 rounded-lg bg-muted px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted/80 transition-colors"
+            >
+              Retry
+            </button>
+          </div>
+        </Card>
+      )}
+
       {notFound && queriedDID && (
         <Card>
           <div className="text-center py-4">
@@ -598,7 +671,22 @@ function CredentialsTab() {
         </Card>
       )}
 
-      {credential && !notFound && (
+      {/* Empty state: queried but no credential and no error */}
+      {queriedDID && !credLoading && !credential && !credError && !notFound && (
+        <Card>
+          <div className="text-center py-4">
+            <Badge variant="muted">No Credential Found</Badge>
+            <p className="text-sm text-muted-foreground mt-2">
+              No credential record exists for this DID + predicate pair on the Private Chain.
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Run a verification from the Verify page to create a credential record.
+            </p>
+          </div>
+        </Card>
+      )}
+
+      {credential && !notFound && !credError && (
         <Card>
           <h2 className="text-sm font-semibold text-foreground mb-4">Credential Record</h2>
           <dl className="space-y-3 text-sm">

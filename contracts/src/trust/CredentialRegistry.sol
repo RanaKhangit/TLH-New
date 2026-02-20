@@ -48,6 +48,8 @@ contract CredentialRegistry is Initializable, AccessControlUpgradeable, UUPSUpgr
 
     event CredentialRevoked(bytes32 indexed subjectDID, bytes32 indexed predicateType, uint256 timestamp);
 
+    event CredentialReinstated(bytes32 indexed subjectDID, bytes32 indexed predicateType, uint256 timestamp);
+
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
         _disableInitializers();
@@ -142,6 +144,26 @@ contract CredentialRegistry is Initializable, AccessControlUpgradeable, UUPSUpgr
         c.valid = false;
 
         emit CredentialRevoked(subjectDID, predicateType, block.timestamp);
+    }
+
+    /// @notice Reinstate a revoked credential to allow reissuance (admin only).
+    /// @dev M-2 fix: Allows recovery when conditions change (e.g., doctor regains license).
+    ///      This clears the revoked status but does NOT restore validity — a new
+    ///      writeCredential() call is required to make the credential valid again.
+    /// @param subjectDID DID of the credential subject.
+    /// @param predicateType Predicate type identifier.
+    function reinstateCredential(bytes32 subjectDID, bytes32 predicateType) external onlyRole(ADMIN_ROLE) {
+        Credential storage c = _credentials[subjectDID][predicateType];
+        if (c.subjectDID == bytes32(0)) revert CredentialNotFound(subjectDID, predicateType);
+
+        // Only revoked credentials can be reinstated
+        require(c.status == CredentialStatus.Revoked, "Credential not revoked");
+
+        // Clear the revoked status - set to Expired so writeCredential can be called again
+        c.status = CredentialStatus.Expired;
+        // Keep valid=false until a new writeCredential is issued
+
+        emit CredentialReinstated(subjectDID, predicateType, block.timestamp);
     }
 
     /// @notice Check whether a credential is currently valid (expiry + revocation aware).

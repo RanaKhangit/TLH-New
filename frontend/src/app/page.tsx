@@ -1,15 +1,12 @@
 "use client";
 
-import { useContractHealth } from "@/hooks/use-contract-health";
-import { useBlockNumber } from "wagmi";
 import { CONTRACTS, PRIVATE_CHAIN_CONTRACTS, CCIP_CONTRACTS, CHAINLINK_JOBS } from "@/lib/contracts";
-import { privateChain } from "@/lib/wagmi";
 import {
   formatAddress,
   etherscanAddressUrl,
 } from "@/lib/utils";
 import { useEffect, useState, useRef } from "react";
-import { fetchProverHealth, fetchEAHealth, type HealthResult } from "@/lib/api";
+import { fetchProverHealth, fetchEAHealth, fetchSepoliaHealth, fetchContractsHealth, fetchPrivateChainHealth, type HealthResult, type SepoliaHealthResult, type ContractsHealthResponse, type PrivateChainHealthResult } from "@/lib/api";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
@@ -51,9 +48,10 @@ function CopyButton({ text }: { text: string }) {
     try {
       await navigator.clipboard.writeText(text);
       setCopied(true);
+      toast.success("Address copied to clipboard");
       setTimeout(() => setCopied(false), 1500);
     } catch {
-      /* clipboard not available */
+      toast.error("Failed to copy to clipboard");
     }
   }
 
@@ -117,17 +115,54 @@ function ContractCard({
 }
 
 export default function DashboardPage() {
-  const { sepoliaContracts, privateContracts, isLoading } = useContractHealth();
-  const { data: sepoliaBlock } = useBlockNumber({ watch: true });
-  const { data: privateBlock } = useBlockNumber({ chainId: privateChain.id, query: { retry: 1, refetchInterval: false } });
+  const [sepoliaHealth, setSepoliaHealth] = useState<SepoliaHealthResult | undefined>(undefined);
+  const [privateChainHealth, setPrivateChainHealth] = useState<PrivateChainHealthResult | undefined>(undefined);
+  const [contractsHealth, setContractsHealth] = useState<ContractsHealthResponse | undefined>(undefined);
   const [proverHealth, setProverHealth] = useState<HealthResult | undefined>(undefined);
   const [eaHealth, setEaHealth] = useState<HealthResult | undefined>(undefined);
   const [lastPolled, setLastPolled] = useState<Date | null>(null);
+  const prevSepolia = useRef<boolean | undefined>(undefined);
+  const prevPrivate = useRef<boolean | undefined>(undefined);
   const prevProver = useRef<boolean | undefined>(undefined);
   const prevEa = useRef<boolean | undefined>(undefined);
 
+  // Build sepoliaContracts from server-side health check
+  const sepoliaContracts = contractsHealth?.contracts.map(c => ({
+    name: c.name,
+    address: c.address,
+    responsive: c.responsive,
+    chain: "sepolia" as const,
+  })) ?? [
+    { name: "DIDRegistry", address: CONTRACTS.DIDRegistry.proxy, responsive: false, chain: "sepolia" as const },
+    { name: "AttestationVerifier", address: CONTRACTS.AttestationVerifier.proxy, responsive: false, chain: "sepolia" as const },
+    { name: "VCHashAnchors", address: CONTRACTS.VCHashAnchors.proxy, responsive: false, chain: "sepolia" as const },
+  ];
+
+  // Private contracts use server-side health check
+  const privateContracts = [
+    { name: "CredentialRegistry", address: PRIVATE_CHAIN_CONTRACTS.CredentialRegistry.proxy, responsive: privateChainHealth?.ok ?? false, chain: "private" as const },
+    { name: "TrustAttestationVerifier", address: PRIVATE_CHAIN_CONTRACTS.TrustAttestationVerifier.proxy, responsive: privateChainHealth?.ok ?? false, chain: "private" as const },
+  ];
+
+  const isLoading = contractsHealth === undefined;
+
   useEffect(() => {
     function poll() {
+      fetchSepoliaHealth().then((r) => {
+        setSepoliaHealth(r);
+        if (prevSepolia.current !== undefined && prevSepolia.current !== r.ok) {
+          toast[r.ok ? "success" : "error"](`Sepolia RPC ${r.ok ? "back online" : "went offline"}`);
+        }
+        prevSepolia.current = r.ok;
+      });
+      fetchPrivateChainHealth().then((r) => {
+        setPrivateChainHealth(r);
+        if (prevPrivate.current !== undefined && prevPrivate.current !== r.ok) {
+          toast[r.ok ? "success" : "error"](`Private Chain ${r.ok ? "back online" : "went offline"}`);
+        }
+        prevPrivate.current = r.ok;
+      });
+      fetchContractsHealth().then(setContractsHealth);
       fetchProverHealth().then((r) => {
         setProverHealth(r);
         if (prevProver.current !== undefined && prevProver.current !== r.ok) {
@@ -159,7 +194,7 @@ export default function DashboardPage() {
           </p>
         </div>
         {(() => {
-          const checks = [sepoliaBlock !== undefined, privateBlock !== undefined, proverHealth?.ok, eaHealth?.ok];
+          const checks = [sepoliaHealth?.ok, privateChainHealth?.ok, proverHealth?.ok, eaHealth?.ok];
           const ready = checks.filter(Boolean).length;
           if (ready === 4) return <Badge variant="success">{ready}/4 All Systems Operational</Badge>;
           if (ready >= 2) return <Badge variant="warning">{ready}/4 Degraded</Badge>;
@@ -181,22 +216,20 @@ export default function DashboardPage() {
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="flex items-center gap-3">
-            <StatusDot ok={sepoliaBlock !== undefined} />
+            <StatusDot ok={sepoliaHealth?.ok} />
             <div>
               <div className="text-sm text-foreground">Sepolia RPC</div>
               <div className="text-xs text-muted-foreground">
-                {sepoliaBlock ? `Block #${sepoliaBlock.toString()}` : "Connecting..."}
+                {sepoliaHealth === undefined ? "Checking..." : sepoliaHealth.ok ? `Block #${sepoliaHealth.blockNumber}` : "Offline"}
               </div>
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <StatusDot ok={privateBlock !== undefined} />
+            <StatusDot ok={privateChainHealth?.ok} />
             <div>
               <div className="text-sm text-foreground">Private Chain</div>
               <div className="text-xs text-muted-foreground">
-                {privateBlock
-                  ? `Block #${privateBlock.toString()}`
-                  : "Offline — start with docker compose up"}
+                {privateChainHealth === undefined ? "Checking..." : privateChainHealth.ok ? `Block #${privateChainHealth.blockNumber}` : "Offline"}
               </div>
             </div>
           </div>
@@ -411,40 +444,98 @@ export default function DashboardPage() {
 
       {/* Architecture */}
       <Card>
-        <h2 className="text-sm font-semibold text-foreground mb-3">
+        <h2 className="text-sm font-semibold text-foreground mb-4">
           Architecture
         </h2>
-        <div className="font-mono text-xs text-muted-foreground space-y-1 leading-relaxed">
-          <div>Prover API (DECO Verify)</div>
-          <div className="text-accent">{"  |"}</div>
-          <div>External Adapter (Dual-Chain Tx Submit)</div>
-          <div className="text-accent">{"  / \\"}</div>
-          <div className="grid grid-cols-2 gap-4 mt-1">
-            <div>
-              <div className="text-foreground font-semibold mb-1">
-                Sepolia (Shared Anchor)
-              </div>
-              <div>DIDRegistry</div>
-              <div>VCHashAnchors</div>
-              <div>AttestationVerifier</div>
-              <div className="text-accent mt-1">CCIP Receiver</div>
+        <div className="space-y-4">
+          {/* Top services */}
+          <div className="flex flex-col items-center gap-2">
+            <div className="rounded-lg bg-accent/10 border border-accent/30 px-4 py-2 text-xs font-medium text-accent">
+              Prover API (DECO Verify)
             </div>
-            <div>
-              <div className="text-foreground font-semibold mb-1">
-                Private Chain (Trust)
-              </div>
-              <div>CredentialRegistry</div>
-              <div>TrustAttestationVerifier</div>
-              <div className="text-accent mt-1">CCIP Sender</div>
+            <svg className="h-4 w-4 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+            </svg>
+            <div className="rounded-lg bg-muted border border-border px-4 py-2 text-xs font-medium text-foreground">
+              External Adapter (Dual-Chain Submit)
             </div>
           </div>
-          <div className="text-center text-accent mt-2">{"<── CCIP Bridge ──>"}</div>
-          <div className="mt-3 pt-3 border-t border-border">
-            <div className="text-foreground font-semibold mb-1">
-              Chainlink Automation
+
+          {/* Fork to chains */}
+          <div className="flex justify-center">
+            <svg className="h-6 w-24 text-accent" viewBox="0 0 96 24" fill="none" stroke="currentColor" strokeWidth={2}>
+              <path d="M48 0 L48 8 L24 20 M48 8 L72 20" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </div>
+
+          {/* Dual chain columns */}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="rounded-lg bg-muted/50 border border-border p-3">
+              <div className="text-xs font-semibold text-foreground mb-2 flex items-center gap-2">
+                <span className="h-2 w-2 rounded-full bg-accent" />
+                Sepolia (Shared Anchor)
+              </div>
+              <div className="space-y-1 text-xs text-muted-foreground">
+                <div className="flex items-center gap-2">
+                  <span className="h-1.5 w-1.5 rounded-full bg-success" />
+                  DIDRegistry
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="h-1.5 w-1.5 rounded-full bg-success" />
+                  VCHashAnchors
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="h-1.5 w-1.5 rounded-full bg-success" />
+                  AttestationVerifier
+                </div>
+                <div className="flex items-center gap-2 mt-2 text-accent">
+                  <span className="h-1.5 w-1.5 rounded-full bg-accent" />
+                  CCIP Receiver
+                </div>
+              </div>
             </div>
-            <div>Webhook Job → On-demand verification</div>
-            <div>Cron Job → Scheduled re-verification</div>
+            <div className="rounded-lg bg-muted/50 border border-border p-3">
+              <div className="text-xs font-semibold text-foreground mb-2 flex items-center gap-2">
+                <span className="h-2 w-2 rounded-full bg-muted-foreground" />
+                Private Chain (Trust)
+              </div>
+              <div className="space-y-1 text-xs text-muted-foreground">
+                <div className="flex items-center gap-2">
+                  <span className="h-1.5 w-1.5 rounded-full bg-success" />
+                  CredentialRegistry
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="h-1.5 w-1.5 rounded-full bg-success" />
+                  TrustAttestationVerifier
+                </div>
+                <div className="flex items-center gap-2 mt-2 text-accent">
+                  <span className="h-1.5 w-1.5 rounded-full bg-accent" />
+                  CCIP Sender
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* CCIP Bridge */}
+          <div className="flex items-center justify-center gap-2 py-1">
+            <div className="h-px flex-1 bg-accent/30" />
+            <span className="text-xs font-medium text-accent px-2">CCIP Bridge</span>
+            <div className="h-px flex-1 bg-accent/30" />
+          </div>
+
+          {/* Chainlink Automation */}
+          <div className="rounded-lg bg-muted/30 border border-border p-3">
+            <div className="text-xs font-semibold text-foreground mb-2">Chainlink Automation</div>
+            <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
+              <div className="flex items-center gap-2">
+                <span className="text-accent">Webhook</span>
+                <span>On-demand verification</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-accent">Cron</span>
+                <span>Scheduled re-verification</span>
+              </div>
+            </div>
           </div>
         </div>
       </Card>

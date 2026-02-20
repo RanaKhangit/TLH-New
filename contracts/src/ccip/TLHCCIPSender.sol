@@ -39,6 +39,9 @@ contract TLHCCIPSender is Initializable, AccessControlUpgradeable, UUPSUpgradeab
     /// @notice Per-destination chain enabled flag.
     mapping(uint64 => bool) public allowedDestinations;
 
+    /// @notice M-3 fix: Track unrefunded balances for users whose refunds failed.
+    mapping(address => uint256) public unclaimedRefunds;
+
     // ── Errors ───────────────────────────────────────────────────────────
     error DestinationNotAllowed(uint64 destChainSelector);
     error ReceiverNotSet(uint64 destChainSelector);
@@ -59,6 +62,9 @@ contract TLHCCIPSender is Initializable, AccessControlUpgradeable, UUPSUpgradeab
     );
 
     event DestinationConfigured(uint64 indexed destChainSelector, address receiver, bool enabled);
+
+    /// @notice M-3 fix: Emitted when refund fails (instead of reverting after CCIP send)
+    event RefundFailed(address indexed recipient, uint256 amount);
 
     // ── Constructor (UUPS) ───────────────────────────────────────────────
     /// @custom:oz-upgrades-unsafe-allow constructor
@@ -113,11 +119,15 @@ contract TLHCCIPSender is Initializable, AccessControlUpgradeable, UUPSUpgradeab
 
         emit CredentialSent(messageId, destChainSelector, subjectDID, predicateType, nonce, fee);
 
-        // Refund excess ETH
+        // M-3 fix: Refund excess ETH — don't revert after CCIP send
         uint256 excess = msg.value - fee;
         if (excess > 0) {
             (bool ok,) = msg.sender.call{value: excess}("");
-            require(ok, "refund failed");
+            if (!ok) {
+                // Track failed refund instead of reverting (CCIP message already sent)
+                unclaimedRefunds[msg.sender] += excess;
+                emit RefundFailed(msg.sender, excess);
+            }
         }
     }
 
@@ -188,6 +198,16 @@ contract TLHCCIPSender is Initializable, AccessControlUpgradeable, UUPSUpgradeab
     }
 
     // ── ETH recovery ────────────────────────────────────────────────────
+    /// @notice M-3 fix: Claim any unclaimed refunds from failed automatic refunds.
+    function claimRefund() external nonReentrant {
+        uint256 amount = unclaimedRefunds[msg.sender];
+        require(amount > 0, "No unclaimed refund");
+
+        unclaimedRefunds[msg.sender] = 0;
+        (bool ok,) = msg.sender.call{value: amount}("");
+        require(ok, "Refund claim failed");
+    }
+
     /// @notice Accept ETH (e.g. CCIP refunds).
     receive() external payable {}
 

@@ -10,13 +10,15 @@ export type BadgeVariant = keyof typeof VARIANT_COLORS;
 export function Badge({
   variant,
   children,
+  className = "",
 }: {
   variant: BadgeVariant;
   children: React.ReactNode;
+  className?: string;
 }) {
   return (
     <span
-      className={`inline-flex items-center rounded-md border px-2.5 py-0.5 text-xs font-medium ${VARIANT_COLORS[variant]}`}
+      className={`inline-flex items-center rounded-md border px-2.5 py-0.5 text-xs font-medium ${VARIANT_COLORS[variant]} ${className}`}
     >
       {children}
     </span>

@@ -53,3 +53,11 @@ ea.log
 
 # Word temp files
 ~$*
+
+# Internal tracking (not for client)
+docs/internal/
+*.docx
+
+# Jira scripts (internal tooling)
+scripts/*jira*.py
+scripts/*attribution*.py

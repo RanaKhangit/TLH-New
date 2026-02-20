@@ -30,6 +30,7 @@ abstract contract BaseAttestationVerifier is Initializable, AccessControlUpgrade
     error ExpiredAttestation(uint256 expiresAt, uint256 nowTs);
     error InvalidAdmin(address admin);
     error InvalidSigner(address signer);
+    error MalformedPredicateData(string reason);
 
     // -------------------------
     // Events (success-path only)
@@ -116,8 +117,21 @@ abstract contract BaseAttestationVerifier is Initializable, AccessControlUpgrade
         result = predicateData[0] == bytes1(0x01);
 
         // ADR-002 §C: decode ABI-encoded payload after the result byte.
-        (, bool abiResult,, uint256 expiresAt,,,) =
-            abi.decode(predicateData[1:], (bytes32, bool, uint256, uint256, bytes32, bytes32, bytes));
+        // H-1 fix: Validate predicate data length before decoding to prevent revert with unclear errors
+        if (predicateData.length < 225) {
+            // Minimum: 1 (result byte) + 7 * 32 (abi-encoded fields) = 225 bytes
+            revert MalformedPredicateData("predicateData too short");
+        }
+
+        bool abiResult;
+        uint256 expiresAt;
+        try this.decodePredicateData(predicateData[1:]) returns (bool _abiResult, uint256 _expiresAt) {
+            abiResult = _abiResult;
+            expiresAt = _expiresAt;
+        } catch {
+            revert MalformedPredicateData("failed to decode predicateData");
+        }
+
         if (result != abiResult) revert ResultMismatch();
         if (result && expiresAt != 0 && block.timestamp > expiresAt) {
             revert ExpiredAttestation(expiresAt, block.timestamp);
@@ -152,6 +166,12 @@ abstract contract BaseAttestationVerifier is Initializable, AccessControlUpgrade
         bytes calldata predicateData,
         bool result
     ) internal virtual;
+
+    /// @notice External helper for try/catch decode pattern (H-1 fix).
+    /// @dev Called via this.decodePredicateData() to enable try/catch on external call.
+    function decodePredicateData(bytes calldata data) external pure returns (bool abiResult, uint256 expiresAt) {
+        (, abiResult,, expiresAt,,,) = abi.decode(data, (bytes32, bool, uint256, uint256, bytes32, bytes32, bytes));
+    }
 
     uint256[50] private __gap;
 }

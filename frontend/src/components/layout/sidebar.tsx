@@ -6,8 +6,8 @@ import { useState } from "react";
 import { cn } from "@/lib/utils";
 
 const NAV_ITEMS = [
-  { href: "/", label: "Dashboard" },
   { href: "/verify", label: "Verify Credential" },
+  { href: "/", label: "Dashboard" },
   { href: "/explorer", label: "Explorer" },
   { href: "/docs", label: "Docs" },
 ];

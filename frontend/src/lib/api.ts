@@ -123,6 +123,59 @@ export async function fetchEAHealth(): Promise<HealthResult> {
   }
 }
 
+export interface SepoliaHealthResult {
+  ok: boolean;
+  blockNumber: number | null;
+  latencyMs: number | null;
+}
+
+export async function fetchSepoliaHealth(): Promise<SepoliaHealthResult> {
+  try {
+    const res = await fetch("/api/health/sepolia", { signal: AbortSignal.timeout(8000) });
+    if (!res.ok) return { ok: false, blockNumber: null, latencyMs: null };
+    return res.json();
+  } catch {
+    return { ok: false, blockNumber: null, latencyMs: null };
+  }
+}
+
+export interface ContractHealthResult {
+  name: string;
+  address: string;
+  responsive: boolean;
+}
+
+export interface ContractsHealthResponse {
+  contracts: ContractHealthResult[];
+  allHealthy: boolean;
+}
+
+export async function fetchContractsHealth(): Promise<ContractsHealthResponse> {
+  try {
+    const res = await fetch("/api/health/contracts", { signal: AbortSignal.timeout(10000) });
+    if (!res.ok) return { contracts: [], allHealthy: false };
+    return res.json();
+  } catch {
+    return { contracts: [], allHealthy: false };
+  }
+}
+
+export interface PrivateChainHealthResult {
+  ok: boolean;
+  blockNumber: number | null;
+  latencyMs: number | null;
+}
+
+export async function fetchPrivateChainHealth(): Promise<PrivateChainHealthResult> {
+  try {
+    const res = await fetch("/api/health/private-chain", { signal: AbortSignal.timeout(8000) });
+    if (!res.ok) return { ok: false, blockNumber: null, latencyMs: null };
+    return res.json();
+  } catch {
+    return { ok: false, blockNumber: null, latencyMs: null };
+  }
+}
+
 export async function triggerFullPipeline(
   clinicianDID?: string,
   surname?: string,

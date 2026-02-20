@@ -55,7 +55,7 @@ const privateChain = defineChain({
 
 // --- Contract addresses ---
 const ATTESTATION_VERIFIER = "0xce863e465f21df87ad9f0a2af838fac1750f08d2" as `0x${string}` // Sepolia
-const TRUST_ATTESTATION_VERIFIER = "0x68B1D87F95878fE05B998F19b66F4baba5De1aed" as `0x${string}` // Private chain
+const TRUST_ATTESTATION_VERIFIER = (process.env.TRUST_ATTESTATION_VERIFIER_ADDRESS || "0x8A791620dd6260079BF849Dc5567aDC3F2FdC318") as `0x${string}` // Private chain
 
 // --- ABI for submitAttestation ---
 const SUBMIT_ATTESTATION_ABI = [
@@ -354,7 +354,6 @@ app.get("/health", async (_req, res) => {
 
   res.json({
     status: "ok",
-    address: account.address,
     chains: {
       sepolia: { contract: ATTESTATION_VERIFIER },
       privateChain: { contract: TRUST_ATTESTATION_VERIFIER, connected: privateChainOk },
@@ -364,7 +363,6 @@ app.get("/health", async (_req, res) => {
 
 app.listen(PORT, () => {
   console.log(`DECO External Adapter running on http://localhost:${PORT}`)
-  console.log(`Wallet address: ${account.address}`)
   console.log(`Prover API URL: ${PROVER_API_URL}`)
   console.log(`Sepolia AttestationVerifier: ${ATTESTATION_VERIFIER}`)
   console.log(`Private Chain TrustAttestationVerifier: ${TRUST_ATTESTATION_VERIFIER}`)

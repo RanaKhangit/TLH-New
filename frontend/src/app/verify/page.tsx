@@ -188,21 +188,24 @@ function VerifyPageContent() {
         </select>
 
         <p className="text-xs text-muted-foreground mb-4">
-          The External Adapter will: look up {givenName} {surname} in the GMC
-          register, generate and verify a DECO attestation, build ADR-002
-          predicateData, sign chain-bound digests, and submit to both Sepolia
-          (shared anchor) and Private Chain (trust) in a single atomic operation.
+          This will verify {givenName} {surname}&apos;s GMC registration and record the result permanently on both chains.
         </p>
 
         <button
           onClick={runPipeline}
           disabled={running || doctorsLoading || doctors.length === 0}
-          className="w-full rounded-lg bg-accent px-4 py-3 text-sm font-bold text-accent-foreground hover:bg-accent/80 transition-colors disabled:opacity-50"
+          className="w-full rounded-lg bg-accent px-4 py-3 text-sm font-bold text-accent-foreground hover:bg-accent/80 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
         >
+          {running && (
+            <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+          )}
           {doctorsLoading
             ? "Loading Doctors..."
             : running
-              ? "Running Pipeline..."
+              ? "Verifying..."
               : "Verify & Submit On-Chain"}
         </button>
       </Card>
@@ -270,27 +273,30 @@ function VerifyPageContent() {
                 </div>
                 <div className="flex justify-between items-center">
                   <dt className="text-muted-foreground">Registration Status</dt>
-                  <dd>
-                    <Badge variant={gmcRecord.registrationStatus === "Registered with a licence to practise" ? "success" : "warning"}>
-                      {gmcRecord.registrationStatus}
+                  <dd className="flex items-center gap-2">
+                    <Badge variant={gmcRecord.registrationStatus?.includes("Licence") ? "success" : "danger"}>
+                      {gmcRecord.registrationStatus?.includes("Licence") ? "LICENSED" : "NOT LICENSED"}
                     </Badge>
+                    <span className="text-xs text-muted-foreground hidden sm:inline">
+                      {!gmcRecord.registrationStatus?.includes("Licence") && `(${gmcRecord.registrationStatus})`}
+                    </span>
                   </dd>
                 </div>
                 <div className="flex justify-between">
                   <dt className="text-muted-foreground">Qualification</dt>
-                  <dd className="text-foreground">{gmcRecord.qualification || "—"}</dd>
+                  <dd className="text-foreground">{gmcRecord.qualification || <span className="text-muted-foreground/70 italic">Not in GMC register</span>}</dd>
                 </div>
                 <div className="flex justify-between">
                   <dt className="text-muted-foreground">Place of Qualification</dt>
-                  <dd className="text-foreground">{gmcRecord.qualPlace || "—"}</dd>
+                  <dd className="text-foreground">{gmcRecord.qualPlace || <span className="text-muted-foreground/70 italic">Not in GMC register</span>}</dd>
                 </div>
                 <div className="flex justify-between">
                   <dt className="text-muted-foreground">Year of Qualification</dt>
-                  <dd className="text-foreground">{gmcRecord.qualYear || "—"}</dd>
+                  <dd className="text-foreground">{gmcRecord.qualYear || <span className="text-muted-foreground/70 italic">Not in GMC register</span>}</dd>
                 </div>
                 <div className="flex justify-between items-center">
                   <dt className="text-muted-foreground">Revalidation Status</dt>
-                  <dd className="text-foreground">{gmcRecord.revalidationStatus || "—"}</dd>
+                  <dd className="text-foreground">{gmcRecord.revalidationStatus || <span className="text-muted-foreground/70 italic">Not in GMC register</span>}</dd>
                 </div>
               </dl>
             ) : (
@@ -483,8 +489,11 @@ function OnChainVerification({
       <h2 className="text-sm font-semibold text-foreground mb-2">
         On-Chain Verification (Live Readback)
       </h2>
-      <p className="text-xs text-muted-foreground mb-4">
+      <p className="text-xs text-muted-foreground mb-2">
         Reading back from both chains to confirm data landed on-chain.
+      </p>
+      <p className="text-xs text-muted-foreground/70 mb-4">
+        Sepolia typically takes 30-60 seconds for block finality. Private Chain confirms in 5-10 seconds.
       </p>
 
       {anyLoading && (
@@ -507,7 +516,7 @@ function OnChainVerification({
           ) : sepoliaOk ? (
             <Badge variant="success">Confirmed</Badge>
           ) : (
-            <Badge variant="warning">Confirming...</Badge>
+            <Badge variant="muted">Confirming...</Badge>
           )}
         </div>
 
@@ -532,11 +541,11 @@ function OnChainVerification({
           ) : trustAttestation.isLoading ? (
             <span className="text-xs text-muted-foreground">Reading...</span>
           ) : trustAttestation.error ? (
-            <Badge variant="warning">Unavailable</Badge>
+            <Badge variant="muted">Unavailable</Badge>
           ) : trustOk ? (
             <Badge variant="success">Confirmed</Badge>
           ) : (
-            <Badge variant="warning">Confirming...</Badge>
+            <Badge variant="muted">Confirming...</Badge>
           )}
         </div>
 
@@ -561,11 +570,11 @@ function OnChainVerification({
           ) : credentialValid.isLoading ? (
             <span className="text-xs text-muted-foreground">Reading...</span>
           ) : credentialValid.error ? (
-            <Badge variant="warning">Unavailable</Badge>
+            <Badge variant="muted">Unavailable</Badge>
           ) : credOk ? (
             <Badge variant="success">Credential Valid</Badge>
           ) : (
-            <Badge variant="warning">Confirming...</Badge>
+            <Badge variant="muted">Confirming...</Badge>
           )}
         </div>
 
@@ -580,9 +589,9 @@ function OnChainVerification({
           ) : sepoliaOk && privateChainOffline ? (
             <Badge variant="warning">Sepolia Only (Private Chain Offline)</Badge>
           ) : sepoliaOk ? (
-            <Badge variant="warning">Sepolia Only</Badge>
+            <Badge variant="muted">Sepolia Only</Badge>
           ) : (
-            <Badge variant="warning">Confirming on Sepolia...</Badge>
+            <Badge variant="muted">Confirming on Sepolia...</Badge>
           )}
         </div>
       </div>

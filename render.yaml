@@ -1,0 +1,47 @@
+services:
+  # Prover API - GMC Lookup & DECO Attestation Service
+  - type: web
+    name: tlh-prover-api
+    runtime: node
+    region: frankfurt
+    plan: free
+    rootDir: prover-api
+    buildCommand: npm install --include=dev && npm run build
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 8787
+      - key: API_TOKEN
+        sync: false  # Set manually in Render dashboard
+      - key: PROVER_PRIVATE_KEY
+        sync: false  # Set manually in Render dashboard
+
+  # External Adapter - Chainlink Bridge for On-Chain Submission
+  - type: web
+    name: tlh-external-adapter
+    runtime: node
+    region: frankfurt
+    plan: free
+    rootDir: chainlink-node/external-adapter
+    buildCommand: npm install --include=dev && npm run build
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 8788
+      - key: PROVER_API_URL
+        fromService:
+          type: web
+          name: tlh-prover-api
+          property: host
+      - key: SEPOLIA_RPC_URL
+        value: "https://sepolia.drpc.org"
+      - key: PRIVATE_KEY
+        value: "0xe8113ed19b5136bb6adb7fdd3817b407ec928ae43068b7bed717f8dd6f6659ce"
+      - key: ATTESTATION_VERIFIER_ADDRESS
+        value: "0xce863e465f21df87ad9f0a2af838fac1750f08d2"
