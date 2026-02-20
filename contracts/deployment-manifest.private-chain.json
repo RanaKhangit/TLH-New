@@ -8,12 +8,16 @@
   },
   "contracts": {
     "CredentialRegistry": {
-      "implementation": "0x0B306BF915C4d645ff596e518fAf3F9669b97016",
-      "proxy": "0x9A9f2CCfdE556A7E9Ff0848998Aa4a0CFD8863AE"
+      "implementation": "0x4A679253410272dd5232B3Ff7cF5dbB88f295319",
+      "previousImplementation": "0x0B306BF915C4d645ff596e518fAf3F9669b97016",
+      "proxy": "0x9A9f2CCfdE556A7E9Ff0848998Aa4a0CFD8863AE",
+      "upgradeTx": "0x99ec83c5356a913197d8c63a198895524d09195cb9cc195282bebf1c8bf415a9"
     },
     "TrustAttestationVerifier": {
-      "implementation": "0x959922bE3CAee4b8Cd9a407cc3ac1C251C2007B1",
-      "proxy": "0x68B1D87F95878fE05B998F19b66F4baba5De1aed"
+      "implementation": "0x7a2088a1bFc9d81c55368AE168C2C02570cB814F",
+      "previousImplementation": "0x959922bE3CAee4b8Cd9a407cc3ac1C251C2007B1",
+      "proxy": "0x68B1D87F95878fE05B998F19b66F4baba5De1aed",
+      "upgradeTx": "0x5df9dd984f3c2d6e2462ad52c1a927e1b3e5c4dbee70363afdfc908dbcf91e52"
     }
   }
 }
