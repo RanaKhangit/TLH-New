@@ -45,3 +45,7 @@ services:
         value: "0xe8113ed19b5136bb6adb7fdd3817b407ec928ae43068b7bed717f8dd6f6659ce"
       - key: ATTESTATION_VERIFIER_ADDRESS
         value: "0xce863e465f21df87ad9f0a2af838fac1750f08d2"
+      - key: PRIVATE_CHAIN_RPC_URL
+        value: "http://46.225.213.211:8545"
+      - key: TRUST_ATTESTATION_VERIFIER_ADDRESS
+        value: "0x8A791620dd6260079BF849Dc5567aDC3F2FdC318"
